@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+        
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
+}
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  description String
+  amount      Float
+  category    String   @default("OTHERS")
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TourRegistration {
+  id            Int           @id @default(autoincrement())
+  name          String
+  phone         String        @unique
+  address       String
+  date          DateTime
+  totalAmount   Float         @default(4500)
+  paidAmount    Float         @default(0)
+  dueAmount     Float         @default(4500)
+  status        String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  ticketLink    String?      // Google Drive link for ticket
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[] // Relation to transactions
+}
+
+model Transaction {
+  id                 Int              @id @default(autoincrement())
+  amount            Float
+  paymentMethod     String           // CASH, BKASH, NAGAD, etc.
+  paymentDate       DateTime         @default(now())
+  description       String?
+  note             String?          // Optional note for the payment
+  status            String           @default("PENDING") // PENDING, APPROVED, REJECTED
+  tourRegistration  TourRegistration @relation(fields: [registrationId], references: [id])
+  registrationId    Int
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model Activity {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  time        DateTime
+  location    String
+  status      String   @default("UPCOMING") // UPCOMING, ONGOING, COMPLETED, CANCELLED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
