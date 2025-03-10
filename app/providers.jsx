@@ -1,16 +1,12 @@
 'use client';
 
-import { ThemeProvider } from 'next-themes';
+// Remove any theme provider imports
 
 export function Providers({ children }) {
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
+    // Remove ThemeProvider wrapper if it exists
+    <>
       {children}
-    </ThemeProvider>
+    </>
   );
 } 

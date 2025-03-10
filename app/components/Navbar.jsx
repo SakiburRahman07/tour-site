@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -39,19 +38,14 @@ import {
   FileText, 
   Info, 
   LogIn,
-  Sun,
-  Moon,
   Clock
 } from "lucide-react";
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    setMounted(true);
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 10);
     };
@@ -120,23 +114,8 @@ export default function Navbar() {
                 </NavigationMenuList>
               </NavigationMenu>
 
-              {/* User Profile & Theme Toggle */}
+              {/* User Profile */}
               <div className="flex items-center space-x-4">
-                {mounted && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    className="rounded-full hover:bg-purple-50"
-                  >
-                    {theme === 'dark' ? (
-                      <Sun className="h-5 w-5 text-purple-600" />
-                    ) : (
-                      <Moon className="h-5 w-5 text-purple-600" />
-                    )}
-                  </Button>
-                )}
-
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="rounded-full border-purple-200">
@@ -167,21 +146,6 @@ export default function Navbar() {
               >
                 <Search className="h-5 w-5 text-purple-600" />
               </Button>
-
-              {mounted && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="rounded-full hover:bg-purple-50"
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-5 w-5 text-purple-600" />
-                  ) : (
-                    <Moon className="h-5 w-5 text-purple-600" />
-                  )}
-                </Button>
-              )}
 
               <Sheet>
                 <SheetTrigger asChild>
