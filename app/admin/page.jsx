@@ -181,6 +181,27 @@ export default function AdminPanel() {
   // Add this state variable at the top with other state declarations
   const [isUpdatingExpense, setIsUpdatingExpense] = useState(null);
 
+  // Add these state variables at the top
+  const [isRegistrationDialogOpen, setIsRegistrationDialogOpen] = useState(false);
+  const [isDeletingRegistration, setIsDeletingRegistration] = useState(null);
+  const [newRegistrationData, setNewRegistrationData] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    status: ''
+  });
+
+  // Add this state variable at the top
+  const [isApprovingRegistration, setIsApprovingRegistration] = useState(null);
+
+  // Add these state variables at the top
+  const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
+  const [registrationToApprove, setRegistrationToApprove] = useState(null);
+
+  // Add these state variables at the top
+  const [isDeleteRegistrationDialogOpen, setIsDeleteRegistrationDialogOpen] = useState(false);
+  const [registrationToDelete, setRegistrationToDelete] = useState(null);
+
   // Check for existing session on component mount
   useEffect(() => {
     const checkSession = () => {
@@ -1795,148 +1816,150 @@ export default function AdminPanel() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex space-x-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-blue-100 text-blue-800 hover:bg-blue-200"
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          সম্পাদনা
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>রেজিস্ট্রেশন সম্পাদনা</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label>নাম</Label>
-                            <Input
-                              defaultValue={reg.name}
-                              onChange={(e) => setEditingRegistration({
-                                ...editingRegistration,
-                                name: e.target.value
-                              })}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>ফোন</Label>
-                            <Input
-                              defaultValue={reg.phone}
-                              onChange={(e) => setEditingRegistration({
-                                ...editingRegistration,
-                                phone: e.target.value
-                              })}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>ঠিকানা</Label>
-                            <Input
-                              defaultValue={reg.address}
-                              onChange={(e) => setEditingRegistration({
-                                ...editingRegistration,
-                                address: e.target.value
-                              })}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>অংশগ্রহণকারী সংখ্যা</Label>
-                            <Input
-                              type="number"
-                              defaultValue={reg.participants}
-                              onChange={(e) => setEditingRegistration({
-                                ...editingRegistration,
-                                participants: parseInt(e.target.value)
-                              })}
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            onClick={() => handleRegistrationUpdate(reg.id, editingRegistration)}
-                            isLoading={isUpdatingRegistration === reg.id}
-                          >
-                            আপডেট করুন
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-
-                    <AlertDialog open={isDeleteDialogOpen && reg.id === transactionToDelete} onOpenChange={(open) => {
-                      if (!open) {
-                        setIsDeleteDialogOpen(false);
-                        setTransactionToDelete(null);
+                    {reg.status === 'PENDING' && (
+                      <AlertDialog open={isApproveDialogOpen && registrationToApprove === reg.id}>
+                        <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-green-100 text-green-800 hover:bg-green-200"
+                            onClick={() => {
+                              setRegistrationToApprove(reg.id);
+                              setIsApproveDialogOpen(true);
+                            }}
+                        disabled={
+                          isApprovingRegistration === reg.id || 
+                          isUpdatingRegistration === reg.id || 
+                          isDeletingRegistration === reg.id
+                        }
+                      >
+                        {isApprovingRegistration === reg.id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-800"></div>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            অনুমোদন
+                          </>
+                        )}
+                      </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>রেজিস্ট্রেশন অনুমোদন</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              আপনি কি নিশ্চিত যে আপনি এই রেজিস্ট্রেশন অনুমোদন করতে চান?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel
+                              onClick={() => {
+                                setIsApproveDialogOpen(false);
+                                setRegistrationToApprove(null);
+                              }}
+                              disabled={isApprovingRegistration === reg.id}
+                            >
+                              না
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleRegistrationApprove(reg.id)}
+                              className="bg-green-600 hover:bg-green-700"
+                              disabled={isApprovingRegistration === reg.id}
+                            >
+                              {isApprovingRegistration === reg.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  অনুমোদন হচ্ছে...
+                                </>
+                              ) : (
+                                'হ্যাঁ, অনুমোদন করুন'
+                              )}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                      onClick={() => {
+                        setEditingRegistration(reg);
+                        setNewRegistrationData({
+                          name: reg.name,
+                          phone: reg.phone,
+                          address: reg.address,
+                          status: reg.status
+                        });
+                        setIsRegistrationDialogOpen(true);
+                      }}
+                      disabled={
+                        isApprovingRegistration === reg.id || 
+                        isUpdatingRegistration === reg.id || 
+                        isDeletingRegistration === reg.id
                       }
-                    }}>
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      এডিট
+                    </Button>
+
+                    <AlertDialog 
+                      open={isDeleteRegistrationDialogOpen && registrationToDelete === reg.id}
+                    >
                       <AlertDialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-red-100 text-red-800 hover:bg-red-200"
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="bg-red-100 text-red-800 hover:bg-red-200"
                           onClick={() => {
-                            setTransactionToDelete(reg.id);
-                            setIsDeleteDialogOpen(true);
+                            setRegistrationToDelete(reg.id);
+                            setIsDeleteRegistrationDialogOpen(true);
                           }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          মুছুন
-                        </Button>
+                      disabled={
+                        isApprovingRegistration === reg.id || 
+                        isUpdatingRegistration === reg.id || 
+                        isDeletingRegistration === reg.id
+                      }
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      মুছুন
+                    </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
+                          <AlertDialogTitle>রেজিস্ট্রেশন মুছে ফেলা</AlertDialogTitle>
                           <AlertDialogDescription>
-                            এই রেজিস্ট্রেশন মুছে ফেলা হবে। এই ক্রিয়া অপরিবর্তনীয়।
+                            আপনি কি নিশ্চিত যে আপনি এই রেজিস্ট্রেশন মুছে ফেলতে চান? এই কাজটি অপরিবর্তনীয়।
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel disabled={deletingTransactionId === reg.id}>বাতিল</AlertDialogCancel>
+                          <AlertDialogCancel
+                            onClick={() => {
+                              setIsDeleteRegistrationDialogOpen(false);
+                              setRegistrationToDelete(null);
+                            }}
+                            disabled={isDeletingRegistration === reg.id}
+                          >
+                            না
+                          </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={() => handleRegistrationDelete(reg.id)}
                             className="bg-red-600 hover:bg-red-700"
-                            disabled={deletingTransactionId === reg.id}
+                            disabled={isDeletingRegistration === reg.id}
                           >
-                            {deletingTransactionId === reg.id ? (
+                            {isDeletingRegistration === reg.id ? (
                               <>
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                                 মুছে ফেলা হচ্ছে...
                               </>
                             ) : (
-                              'মুছে ফেলুন'
+                              'হ্যাঁ, মুছে ফেলুন'
                             )}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </div>
-                  {reg.status === 'PENDING' && (
-                    <div className="flex space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-green-100 text-green-800 hover:bg-green-200"
-                        onClick={() => handleStatusUpdate(reg.id, 'APPROVED')}
-                        isLoading={isUpdatingRegistration === reg.id}
-                        disabled={isUpdatingRegistration === reg.id}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        অনুমোদন
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-red-100 text-red-800 hover:bg-red-200"
-                        onClick={() => handleStatusUpdate(reg.id, 'REJECTED')}
-                        isLoading={isUpdatingRegistration === reg.id}
-                        disabled={isUpdatingRegistration === reg.id}
-                      >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        বাতিল
-                      </Button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -2416,6 +2439,87 @@ export default function AdminPanel() {
     }
   };
 
+  // Add these functions to handle registration updates and deletion
+  const handleRegistrationUpdate = async (registrationId, updatedData) => {
+    setIsUpdatingRegistration(registrationId);
+    try {
+      const response = await fetch(`/api/tour-registration/${registrationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsRegistrationDialogOpen(false);
+        setEditingRegistration(null);
+        await fetchRegistrations();
+      } else {
+        // Show the specific error message from the server
+        alert(data.error || 'রেজিস্ট্রেশন আপডেট করতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error updating registration:', error);
+      alert('রেজিস্ট্রেশন আপডেট করতে সমস্যা হয়েছে');
+    } finally {
+      setIsUpdatingRegistration(null);
+    }
+  };
+
+  const handleRegistrationDelete = async (registrationId) => {
+    setIsDeletingRegistration(registrationId);
+    try {
+      const response = await fetch(`/api/tour-registration/${registrationId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchRegistrations();
+      } else {
+        alert('রেজিস্ট্রেশন মুছে ফেলতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error deleting registration:', error);
+      alert('রেজিস্ট্রেশন মুছে ফেলতে সমস্যা হয়েছে');
+    } finally {
+      setIsDeletingRegistration(null);
+      setIsDeleteRegistrationDialogOpen(false);
+      setRegistrationToDelete(null);
+    }
+  };
+
+  // Add this function to handle registration approval
+  const handleRegistrationApprove = async (registrationId) => {
+    setIsApprovingRegistration(registrationId);
+    try {
+      const response = await fetch(`/api/tour-registration/${registrationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'APPROVED' }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await fetchRegistrations();
+      } else {
+        alert(data.error || 'রেজিস্ট্রেশন অনুমোদন করতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error approving registration:', error);
+      alert('রেজিস্ট্রেশন অনুমোদন করতে সমস্যা হয়েছে');
+    } finally {
+      setIsApprovingRegistration(null);
+      setIsApproveDialogOpen(false);
+      setRegistrationToApprove(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -2551,6 +2655,93 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* Registration Edit Dialog */}
+      <Dialog open={isRegistrationDialogOpen} onOpenChange={setIsRegistrationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>রেজিস্ট্রেশন সম্পাদনা</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">নাম</Label>
+                <Input
+                  id="name"
+                  value={newRegistrationData.name}
+                  onChange={(e) => setNewRegistrationData({
+                    ...newRegistrationData,
+                    name: e.target.value
+                  })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">ফোন</Label>
+                <Input
+                  id="phone"
+                  value={newRegistrationData.phone}
+                  onChange={(e) => setNewRegistrationData({
+                    ...newRegistrationData,
+                    phone: e.target.value
+                  })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address">ঠিকানা</Label>
+                <Input
+                  id="address"
+                  value={newRegistrationData.address}
+                  onChange={(e) => setNewRegistrationData({
+                    ...newRegistrationData,
+                    address: e.target.value
+                  })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="status">স্টেটাস</Label>
+                <Select
+                  value={newRegistrationData.status}
+                  onValueChange={(value) => setNewRegistrationData({
+                    ...newRegistrationData,
+                    status: value
+                  })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="স্টেটাস বাছাই করুন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PENDING">অপেক্ষমান</SelectItem>
+                    <SelectItem value="APPROVED">অনুমোদিত</SelectItem>
+                    <SelectItem value="REJECTED">বাতিল</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRegistrationDialogOpen(false);
+                setEditingRegistration(null);
+              }}
+              disabled={isUpdatingRegistration === editingRegistration?.id}
+            >
+              বাতিল
+            </Button>
+            <Button
+              onClick={() => handleRegistrationUpdate(editingRegistration.id, newRegistrationData)}
+              disabled={isUpdatingRegistration === editingRegistration?.id}
+              isLoading={isUpdatingRegistration === editingRegistration?.id}
+            >
+              আপডেট করুন
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
