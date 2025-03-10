@@ -19,7 +19,7 @@ export async function GET(request) {
 
     return NextResponse.json(registrations);
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error fetching registrations:', error);
     return NextResponse.json(
       { error: 'Failed to fetch registrations' },
       { status: 500 }

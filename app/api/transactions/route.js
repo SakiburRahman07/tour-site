@@ -6,46 +6,55 @@ const prisma = new PrismaClient();
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { registrationId, amount, paymentMethod, note, description, status } = body;
+    const { registrationId, amount, paymentMethod, description, note, status } = body;
 
-    // Create the transaction with the provided status or default to 'PENDING'
+    // Validate required fields
+    if (!registrationId || !amount || !paymentMethod) {
+      return NextResponse.json(
+        { error: 'Required fields are missing' },
+        { status: 400 }
+      );
+    }
+
+    // First check if the registration exists
+    const registration = await prisma.tourRegistration.findUnique({
+      where: { id: registrationId },
+    });
+
+    if (!registration) {
+      return NextResponse.json(
+        { error: 'Registration not found' },
+        { status: 404 }
+      );
+    }
+
+    // Create the transaction
     const transaction = await prisma.transaction.create({
       data: {
-        registrationId,
-        amount,
+        amount: parseFloat(amount),
         paymentMethod,
-        note,
-        description,
-        status: status || 'PENDING', // Use provided status or default to 'PENDING'
-        paymentDate: new Date(),
+        description: description || `Payment via ${paymentMethod}`,
+        note: note || null,
+        status: status || 'PENDING',
+        registrationId,
       },
     });
 
-    // If the status is APPROVED, update the registration's paid amount immediately
+    // If the transaction is approved, update the registration's paidAmount
     if (status === 'APPROVED') {
-      // Get the registration
-      const registration = await prisma.tourRegistration.findUnique({
+      await prisma.tourRegistration.update({
         where: { id: registrationId },
+        data: {
+          paidAmount: {
+            increment: parseFloat(amount)
+          }
+        }
       });
-
-      if (registration) {
-        // Update the paid amount and due amount
-        const newPaidAmount = registration.paidAmount + amount;
-        const newDueAmount = registration.totalAmount - newPaidAmount;
-
-        await prisma.tourRegistration.update({
-          where: { id: registrationId },
-          data: {
-            paidAmount: newPaidAmount,
-            dueAmount: newDueAmount,
-          },
-        });
-      }
     }
 
     return NextResponse.json(transaction);
   } catch (error) {
-    console.error('Error creating transaction:', error);
+    console.error('Transaction creation error:', error);
     return NextResponse.json(
       { error: 'Failed to create transaction' },
       { status: 500 }

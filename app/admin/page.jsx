@@ -25,7 +25,9 @@ import {
   User,
   Phone,
   MapPin,
-  Search
+  Search,
+  Receipt,
+  ArrowUpRight
 } from "lucide-react";
 import {
   Sheet,
@@ -202,6 +204,9 @@ export default function AdminPanel() {
   const [isDeleteRegistrationDialogOpen, setIsDeleteRegistrationDialogOpen] = useState(false);
   const [registrationToDelete, setRegistrationToDelete] = useState(null);
 
+  // Add this to your state declarations at the top of the AdminPanel component
+  const [transactions, setTransactions] = useState([]);
+
   // Check for existing session on component mount
   useEffect(() => {
     const checkSession = () => {
@@ -285,7 +290,8 @@ export default function AdminPanel() {
         fetchRegistrations(),
         fetchAllTransactions(),
         fetchActivities(),
-        fetchAllUsers()
+        fetchAllUsers(),
+        fetchTransactions(), // Add this new function call
       ]);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -349,7 +355,7 @@ export default function AdminPanel() {
   const fetchAllUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const response = await fetch('/api/tour-registration');
+      const response = await fetch('/api/tour-registration?status=APPROVED');
       if (response.ok) {
         const data = await response.json();
         setAllUsers(data);
@@ -358,6 +364,18 @@ export default function AdminPanel() {
       console.error('Error fetching users:', error);
     } finally {
       setIsLoadingUsers(false);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    try {
+      const response = await fetch('/api/transactions/all');
+      if (response.ok) {
+        const data = await response.json();
+        setTransactions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
     }
   };
 
@@ -682,19 +700,23 @@ export default function AdminPanel() {
           registrationId: userInfo.id,
           amount: parseFloat(paymentAmount),
           paymentMethod,
-          note: paymentNote, // Make sure note is included
+          note: paymentNote,
           description: `Payment via ${paymentMethod}`,
-          status: 'APPROVED',
+          status: 'APPROVED', // Auto-approve payments made by admin
         }),
       });
 
       if (response.ok) {
-        // Refresh user info and transactions
-        handleUserSearch();
+        // Clear form
         setPaymentAmount('');
-        setPaymentNote(''); // Clear note after successful submission
+        setPaymentMethod('CASH');
+        setPaymentNote('');
+        
+        // Refresh user info and transactions
+        await handleUserSearch();
       } else {
-        setUserSearchError('পেমেন্ট প্রক্রিয়াকরণে সমস্যা হয়েছে');
+        const error = await response.json();
+        setUserSearchError(error.message || 'পেমেন্ট প্রক্রিয়াকরণে সমস্যা হয়েছে');
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -769,146 +791,369 @@ export default function AdminPanel() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        // Calculate total collections and dues
-        const totalToCollect = registrations.reduce((sum, reg) => sum + reg.totalAmount, 0);
-        const totalCollected = registrations.reduce((sum, reg) => sum + reg.paidAmount, 0);
-        const totalDue = totalToCollect - totalCollected;
-
-        // Calculate categorical expenses
-        const categoryTotals = expenses.reduce((acc, exp) => {
-          acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
-          return acc;
-        }, {});
-
-        // Calculate recent expenses (last 24 hours)
-        const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const recentExpenses = expenses.filter(exp => new Date(exp.createdAt) > last24Hours);
-        const recentExpenseTotal = recentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-
-        // Calculate today's expenses
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayExpenses = expenses.filter(exp => new Date(exp.createdAt) > today);
-        const todayExpenseTotal = todayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-
         return (
-          <div className="space-y-6">
-            {/* Registration and Transaction Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">মোট রেজিস্ট্রেশন</CardTitle>
+          <div className="space-y-8">
+            {/* Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card className="bg-gradient-to-br from-purple-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">মোট রেজিস্ট্রেশন</CardTitle>
+                  <Users className="h-4 w-4 text-purple-600" />
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{registrations.length}</p>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600">অনুমোদিত: {registrations.filter(r => r.status === 'APPROVED').length}</p>
-                    <p className="text-sm text-gray-600">পেন্ডিং: {registrations.filter(r => r.status === 'PENDING').length}</p>
+                  <div className="text-2xl font-bold">{registrations.length}</div>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">
+                        {registrations.filter(r => r.status === 'APPROVED').length}
+                      </span> অনুমোদিত
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-yellow-600 font-medium">
+                        {registrations.filter(r => r.status === 'PENDING').length}
+                      </span> অপেক্ষমান
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-red-600 font-medium">
+                        {registrations.filter(r => r.status === 'REJECTED').length}
+                      </span> বাতিল
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">পেন্ডিং পেমেন্ট</CardTitle>
+
+              <Card className="bg-gradient-to-br from-green-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">মোট আয়</CardTitle>
+                  <DollarSign className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{pendingTransactions.length}</p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    মোট পরিমাণ: {formatCurrency(pendingTransactions.reduce((sum, t) => sum + t.amount, 0))}
-                  </p>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(
+                      (transactions || [])
+                        .filter(t => t.status === 'APPROVED')
+                        .reduce((sum, t) => sum + t.amount, 0)
+                    )}
+                  </div>
+                  <div className="flex items-center mt-4 text-xs text-muted-foreground">
+                    <ArrowUpRight className="h-4 w-4 text-green-600 mr-1" />
+                    গত ৭ দিনে{' '}
+                    {formatCurrency(
+                      (transactions || [])
+                        .filter(t => 
+                          t.status === 'APPROVED' && 
+                          new Date(t.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+                        )
+                        .reduce((sum, t) => sum + t.amount, 0)
+                    )}
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">মোট খরচ</CardTitle>
+
+              <Card className="bg-gradient-to-br from-red-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">মোট খরচ</CardTitle>
+                  <Receipt className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">
+                  <div className="text-2xl font-bold">
                     {formatCurrency(expenses.reduce((sum, exp) => sum + exp.amount, 0))}
-                  </p>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600">গত ২৪ ঘন্টা: {formatCurrency(recentExpenseTotal)}</p>
-                    <p className="text-sm text-gray-600">আজ: {formatCurrency(todayExpenseTotal)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    {Object.entries(
+                      expenses.reduce((acc, exp) => {
+                        acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
+                        return acc;
+                      }, {})
+                    ).map(([category, amount]) => (
+                      <div key={category} className="text-xs text-muted-foreground">
+                        {category}: {formatCurrency(amount)}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* New Cash in Hand card */}
+              <Card className="bg-gradient-to-br from-amber-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">হাতে নগদ</CardTitle>
+                  <CreditCard className="h-4 w-4 text-amber-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(
+                      (transactions || [])
+                        .filter(t => t.status === 'APPROVED')
+                        .reduce((sum, t) => sum + t.amount, 0) - 
+                      expenses.reduce((sum, exp) => sum + exp.amount, 0)
+                    )}
+                  </div>
+                  <div className="flex items-center mt-4 text-xs text-muted-foreground">
+                    {((transactions || [])
+                        .filter(t => t.status === 'APPROVED')
+                        .reduce((sum, t) => sum + t.amount, 0) - 
+                      expenses.reduce((sum, exp) => sum + exp.amount, 0)) >= 0 ? 
+                      <span className="text-green-600">বাকি আছে</span> : 
+                      <span className="text-red-600">ঘাটতি আছে</span>
+                    }
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-blue-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">কার্যক্রম</CardTitle>
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{activities.length}</div>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-blue-600 font-medium">
+                        {activities.filter(a => a.status === 'UPCOMING').length}
+                      </span> আসন্ন
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">
+                        {activities.filter(a => a.status === 'ONGOING').length}
+                      </span> চলমান
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-600 font-medium">
+                        {activities.filter(a => a.status === 'COMPLETED').length}
+                      </span> সম্পন্ন
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Collection Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Recent Activities */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">মোট সংগ্রহ</CardTitle>
+                  <CardTitle className="text-lg flex items-center">
+                    <Clock className="h-5 w-5 mr-2 text-purple-600" />
+                    সাম্প্রতিক কার্যক্রম
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{formatCurrency(totalCollected)}</p>
+                  <div className="space-y-4">
+                    {activities
+                      .sort((a, b) => new Date(b.time) - new Date(a.time))
+                      .slice(0, 5)
+                      .map(activity => (
+                        <div key={activity.id} className="flex items-center space-x-4">
+                          <div className={`w-2 h-2 rounded-full ${
+                            activity.status === 'UPCOMING' ? 'bg-blue-600' :
+                            activity.status === 'ONGOING' ? 'bg-green-600' :
+                            activity.status === 'COMPLETED' ? 'bg-gray-600' :
+                            'bg-red-600'
+                          }`} />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{activity.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDateTime(activity.time)} • {activity.location}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={
+                            activity.status === 'UPCOMING' ? 'border-blue-200 text-blue-800' :
+                            activity.status === 'ONGOING' ? 'border-green-200 text-green-800' :
+                            activity.status === 'COMPLETED' ? 'border-gray-200 text-gray-800' :
+                            'border-red-200 text-red-800'
+                          }>
+                            {activity.status}
+                          </Badge>
+                        </div>
+                      ))}
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">বাকি আছে</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{formatCurrency(totalDue)}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">মোট পাওনা</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{formatCurrency(totalToCollect)}</p>
-                </CardContent>
-              </Card>
-            </div>
 
-            {/* Categorical Expenses */}
             <Card>
               <CardHeader>
-                <CardTitle>ক্যাটাগরি অনুযায়ী খরচ</CardTitle>
+                  <CardTitle className="text-lg flex items-center">
+                    <Receipt className="h-5 w-5 mr-2 text-purple-600" />
+                    সাম্প্রতিক খরচ
+                  </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(categoryTotals).map(([category, total]) => (
-                    <div key={category} className="p-4 border rounded-lg">
-                      <Badge variant="outline">{category}</Badge>
-                      <p className="text-2xl font-bold mt-2">{formatCurrency(total)}</p>
+                  <div className="space-y-4">
+                    {expenses
+                      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                      .slice(0, 5)
+                      .map(expense => (
+                        <div key={expense.id} className="flex items-center space-x-4">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            expense.category === 'FOOD' ? 'bg-green-100 text-green-600' :
+                            expense.category === 'TRANSPORT' ? 'bg-blue-100 text-blue-600' :
+                            expense.category === 'ACCOMMODATION' ? 'bg-yellow-100 text-yellow-600' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {expense.category.charAt(0)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{expense.description}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(expense.createdAt)} • {expense.category}
+                            </p>
+                          </div>
+                          <div className="text-sm font-medium">
+                            {formatCurrency(expense.amount)}
+                          </div>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
+            </div>
 
-            {/* Recent Expenses */}
+            {/* Recent Registrations */}
             <Card>
               <CardHeader>
-                <CardTitle>সাম্প্রতিক খরচ</CardTitle>
+                <CardTitle className="text-lg flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-purple-600" />
+                  সাম্প্রতিক রেজিস্ট্রেশন
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {recentExpenses.map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex justify-between items-start p-4 border rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{expense.description}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline">{expense.category}</Badge>
-                          <p className="text-sm text-gray-500">
-                            {formatDate(expense.createdAt)}
+                  {registrations
+                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                    .slice(0, 5)
+                    .map(reg => (
+                      <div key={reg.id} className="flex items-center space-x-4">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                          {reg.name.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{reg.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {reg.phone} • {reg.address}
                           </p>
                         </div>
-                      </div>
-                      <p className="font-bold">{formatCurrency(expense.amount)}</p>
+                        <Badge variant="outline" className={
+                          reg.status === 'APPROVED' ? 'border-green-200 text-green-800' :
+                          reg.status === 'PENDING' ? 'border-yellow-200 text-yellow-800' :
+                          'border-red-200 text-red-800'
+                        }>
+                          {reg.status === 'APPROVED' ? 'অনুমোদিত' :
+                           reg.status === 'PENDING' ? 'অপেক্ষমান' :
+                           'বাতিল'}
+                        </Badge>
                     </div>
                   ))}
-                  {recentExpenses.length === 0 && (
-                    <p className="text-center text-gray-500">কোন সাম্প্রতিক খরচ নেই</p>
-                  )}
                 </div>
               </CardContent>
             </Card>
+
+            {/* Add these in your renderContent method after the current dashboard cards */}
+
+            {/* 1. Add a new section for Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+              {/* Per Person Metrics Card */}
+              <Card className="bg-gradient-to-br from-indigo-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">জনপ্রতি হিসাব</CardTitle>
+                  <User className="h-4 w-4 text-indigo-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">জনপ্রতি খরচ</p>
+                      <p className="text-lg font-semibold text-indigo-600">
+                        {formatCurrency(
+                          registrations.filter(r => r.status === 'APPROVED').length > 0 
+                            ? expenses.reduce((sum, exp) => sum + exp.amount, 0) / 
+                              registrations.filter(r => r.status === 'APPROVED').length
+                            : 0
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">গড় আয়</p>
+                      <p className="text-lg font-semibold text-green-600">
+                        {formatCurrency(
+                          registrations.filter(r => r.status === 'APPROVED').length > 0
+                            ? (transactions || [])
+                                .filter(t => t.status === 'APPROVED')
+                                .reduce((sum, t) => sum + t.amount, 0) / 
+                                registrations.filter(r => r.status === 'APPROVED').length
+                            : 0
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Payment Method Analysis */}
+              <Card className="bg-gradient-to-br from-cyan-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">পেমেন্ট পদ্ধতি</CardTitle>
+                  <CreditCard className="h-4 w-4 text-cyan-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {Object.entries(
+                      (transactions || [])
+                        .filter(t => t.status === 'APPROVED')
+                        .reduce((acc, t) => {
+                          acc[t.paymentMethod] = (acc[t.paymentMethod] || 0) + t.amount;
+                          return acc;
+                        }, {})
+                    )
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 3)
+                      .map(([method, amount]) => (
+                        <div key={method} className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <div className={`w-2 h-2 rounded-full ${
+                              method === 'CASH' ? 'bg-green-500' :
+                              method === 'BKASH' ? 'bg-pink-500' :
+                              method === 'NAGAD' ? 'bg-orange-500' :
+                              'bg-blue-500'
+                            } mr-2`}></div>
+                            <span className="text-sm">{method}</span>
+                          </div>
+                          <span className="text-sm font-medium">
+                            {formatCurrency(amount)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Registration Statistics */}
+              <Card className="bg-gradient-to-br from-purple-50 to-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">রেজিস্ট্রেশন স্ট্যাটিস্টিকস</CardTitle>
+                  <Users className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">অনুমোদনের হার</p>
+                      <p className="text-lg font-semibold text-purple-600">
+                        {registrations.length > 0 
+                          ? Math.round((registrations.filter(r => r.status === 'APPROVED').length / registrations.length) * 100)
+                          : 0}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">গত ৭ দিনে রেজিস্ট্রেশন</p>
+                      <p className="text-lg font-semibold text-purple-600">
+                        {registrations.filter(r => 
+                          new Date(r.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+                        ).length}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         );
 
@@ -1532,7 +1777,9 @@ export default function AdminPanel() {
                             } />
                           </SelectTrigger>
                           <SelectContent>
-                            {allUsers.map((user) => (
+                            {allUsers
+                              .filter(user => user.status === 'APPROVED') // This is optional since we're already filtering in the API
+                              .map((user) => (
                               <SelectItem key={user.id} value={`${user.name} - ${user.phone}`}>
                                 {user.name} - {user.phone}
                               </SelectItem>
@@ -1614,9 +1861,9 @@ export default function AdminPanel() {
                     <div className="pt-4 border-t border-gray-100">
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <p className="font-medium text-gray-700">মোট টাকা</p>
+                          <p className="font-medium text-gray-700">জনপ্রতি খরচ</p>
                           <p className="text-xl font-semibold text-purple-600">
-                            {formatCurrency(userInfo.totalAmount)}
+                            {formatCurrency(userInfo.perPersonExpense)}
                           </p>
                         </div>
                         <div>
@@ -1626,9 +1873,11 @@ export default function AdminPanel() {
                           </p>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-700">বাকি টাকা</p>
-                          <p className="text-xl font-semibold text-red-600">
-                            {formatCurrency(userInfo.dueAmount)}
+                          <p className="font-medium text-gray-700">
+                            {userInfo.balance >= 0 ? 'মোট টাকা পাওনা' : 'মোট টাকা দেনা'}
+                          </p>
+                          <p className={`text-xl font-semibold ${userInfo.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatCurrency(Math.abs(userInfo.balance))}
                           </p>
                         </div>
                       </div>

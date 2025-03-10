@@ -248,9 +248,9 @@ export default function UserInfo() {
                       <div className="pt-4 border-t border-gray-100">
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <p className="font-medium text-gray-700">মোট টাকা</p>
+                            <p className="font-medium text-gray-700">জনপ্রতি খরচ</p>
                             <p className="text-xl font-semibold text-purple-600">
-                              {formatCurrency(userInfo.totalAmount)}
+                              {formatCurrency(userInfo.perPersonExpense)}
                             </p>
                           </div>
                           <div>
@@ -260,9 +260,11 @@ export default function UserInfo() {
                             </p>
                           </div>
                           <div>
-                            <p className="font-medium text-gray-700">বাকি টাকা</p>
-                            <p className="text-xl font-semibold text-red-600">
-                              {formatCurrency(userInfo.dueAmount)}
+                            <p className="font-medium text-gray-700">
+                              {userInfo.balance >= 0 ? 'মোট টাকা পাওনা' : 'মোট টাকা দেনা'}
+                            </p>
+                            <p className={`text-xl font-semibold ${userInfo.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatCurrency(Math.abs(userInfo.balance))}
                             </p>
                           </div>
                         </div>
