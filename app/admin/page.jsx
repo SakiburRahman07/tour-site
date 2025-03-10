@@ -247,6 +247,12 @@ export default function AdminPanel() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Add this state at the top with other states
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
+  // Add this state variable at the top with other state declarations
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
   // Check for existing session on component mount
   useEffect(() => {
     const checkSession = () => {
@@ -2835,6 +2841,13 @@ export default function AdminPanel() {
     </Dialog>
   );
 
+  // Modify your tab change handler
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    // Close the mobile nav when a tab is selected
+    setIsMobileNavOpen(false);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -2875,11 +2888,11 @@ export default function AdminPanel() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
+      {/* Mobile Header - modify the Sheet component */}
       <div className="lg:hidden bg-white border-b p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">অ্যাডমিন প্যানেল</h1>
-          <Sheet>
+          <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon">
                 <Menu className="h-6 w-6" />
@@ -2893,7 +2906,10 @@ export default function AdminPanel() {
                 {sidebarItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setIsSheetOpen(false); // Close the sheet when a menu item is clicked
+                    }}
                     className={`flex items-center space-x-2 w-full p-2 rounded-lg transition-colors ${
                       activeTab === item.id
                         ? 'bg-purple-100 text-purple-900'
@@ -2905,7 +2921,10 @@ export default function AdminPanel() {
                   </button>
                 ))}
                 <button
-                  onClick={handleLogout}
+                  onClick={() => {
+                    handleLogout();
+                    setIsSheetOpen(false); // Close the sheet when logout is clicked
+                  }}
                   className="flex items-center space-x-2 w-full p-2 rounded-lg text-red-600 hover:bg-red-50"
                   disabled={isLoggingOut}
                 >
