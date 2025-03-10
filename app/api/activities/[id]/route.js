@@ -1,22 +1,38 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = params;
     const data = await request.json();
-
-    // Format the time string to include seconds
-    const timeString = data.time + ':00';  // Add seconds to make it complete ISO format
-
-    // Format the data properly before updating
+    
+    // Create update data object
     const updateData = {
       title: data.title,
       description: data.description,
       location: data.location,
-      time: new Date(timeString).toISOString(), // Convert to proper ISO string
     };
 
+    // Handle time update if provided
+    if (data.time) {
+      try {
+        const dateObj = new Date(data.time);
+        if (!isNaN(dateObj.getTime())) {
+          updateData.time = dateObj.toISOString();
+        }
+      } catch (error) {
+        console.error('Date parsing error:', error);
+      }
+    }
+
+    // Handle status update if provided
+    if (data.status) {
+      updateData.status = data.status;
+    }
+
+    // Update the activity
     const activity = await prisma.activity.update({
       where: { id: parseInt(id) },
       data: updateData,
@@ -26,7 +42,7 @@ export async function PATCH(request, { params }) {
   } catch (error) {
     console.error('Error updating activity:', error);
     return NextResponse.json(
-      { error: 'Error updating activity' },
+      { error: 'Failed to update activity' },
       { status: 500 }
     );
   }

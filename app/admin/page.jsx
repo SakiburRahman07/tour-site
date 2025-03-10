@@ -63,6 +63,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Editor } from 'primereact/editor';
+import 'primereact/resources/themes/lara-light-indigo/theme.css';   // theme
+import 'primereact/resources/primereact.min.css';                   // core css
+import 'primeicons/primeicons.css';                                 // icons
 
 // Encryption key for added security
 const ENCRYPTION_KEY = 'tour_planner_admin';
@@ -76,6 +81,37 @@ const encrypt = (text) => {
 const decrypt = (encoded) => {
   const decoded = atob(encoded);
   return decoded.replace(ENCRYPTION_KEY, '');
+};
+
+// Add these helper functions near the top of your component, after the encrypt/decrypt functions
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'UPCOMING':
+      return 'bg-blue-100 text-blue-800';
+    case 'ONGOING':
+      return 'bg-green-100 text-green-800';
+    case 'COMPLETED':
+      return 'bg-gray-100 text-gray-800';
+    case 'CANCELLED':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const getStatusText = (status) => {
+  switch (status) {
+    case 'UPCOMING':
+      return 'আসন্ন';
+    case 'ONGOING':
+      return 'চলমান';
+    case 'COMPLETED':
+      return 'সম্পন্ন';
+    case 'CANCELLED':
+      return 'বাতিল';
+    default:
+      return 'অজানা';
+  }
 };
 
 export default function AdminPanel() {
@@ -206,6 +242,10 @@ export default function AdminPanel() {
 
   // Add this to your state declarations at the top of the AdminPanel component
   const [transactions, setTransactions] = useState([]);
+
+  // Add these new state variables at the top of your component with other states
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Check for existing session on component mount
   useEffect(() => {
@@ -528,6 +568,12 @@ export default function AdminPanel() {
 
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
+    
+    if (!activityTitle || !activityTime || !activityLocation) {
+      alert('সব ফিল্ড পূরণ করুন');
+      return;
+    }
+    
     setIsActivityFormSubmitting(true);
     
     try {
@@ -541,13 +587,23 @@ export default function AdminPanel() {
         },
         body: JSON.stringify({
           title: activityTitle,
-          description: activityDescription,
+          description: activityDescription, // PrimeReact Editor already provides HTML content
           time: formattedTime,
           location: activityLocation,
+          status: 'UPCOMING',
         }),
       });
 
-      if (response.ok) {
+      if (!response.ok) {
+        throw new Error('Failed to create activity');
+      }
+      
+      const newActivity = await response.json();
+      
+      // Add to activities in state
+      setActivities([newActivity, ...activities]);
+      
+      // Reset form
         setActivityTitle('');
         setActivityDescription('');
         setActivityTime(() => {
@@ -556,14 +612,13 @@ export default function AdminPanel() {
           return now.toISOString().slice(0, 16);
         });
         setActivityLocation('');
-        fetchActivities();
-      } else {
-        const error = await response.json();
-        alert('Error adding activity: ' + (error.message || 'Unknown error'));
-      }
+      
+      // Replace alert with success dialog
+      setSuccessMessage('কার্যক্রম সফলভাবে যোগ করা হয়েছে');
+      setShowSuccessDialog(true);
     } catch (error) {
-      console.error('Error adding activity:', error);
-      alert('Error adding activity');
+      console.error('Error creating activity:', error);
+      alert('কার্যক্রম যোগ করতে সমস্যা হয়েছে');
     } finally {
       setIsActivityFormSubmitting(false);
     }
@@ -577,15 +632,37 @@ export default function AdminPanel() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({
+          status: newStatus,
+          // Send the existing activity data to preserve it
+          ...activities.find(a => a.id === id),
+          // Override the status with the new one
+          status: newStatus
+        }),
       });
 
-      if (response.ok) {
-        fetchActivities();
+      if (!response.ok) {
+        throw new Error('Failed to update activity status');
       }
+
+      const updatedActivity = await response.json();
+
+      // Update the activity in state
+      setActivities(activities.map(activity => 
+        activity.id === id ? updatedActivity : activity
+      ));
+
+      // Show success message
+      setSuccessMessage(
+        newStatus === 'ONGOING' ? 'কার্যক্রম সফলভাবে শুরু করা হয়েছে' :
+        newStatus === 'COMPLETED' ? 'কার্যক্রম সফলভাবে সম্পন্ন করা হয়েছে' :
+        newStatus === 'CANCELLED' ? 'কার্যক্রম সফলভাবে বাতিল করা হয়েছে' :
+        'কার্যক্রমের অবস্থা আপডেট করা হয়েছে'
+      );
+      setShowSuccessDialog(true);
     } catch (error) {
       console.error('Error updating activity status:', error);
-      alert('Error updating activity status');
+      alert('কার্যক্রমের অবস্থা আপডেট করতে সমস্যা হয়েছে');
     } finally {
       setIsUpdatingActivity(null);
     }
@@ -1703,12 +1780,12 @@ export default function AdminPanel() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="description">বিবরণ</Label>
-                    <Input
+                    <Editor
                       id="description"
                       value={activityDescription}
-                      onChange={(e) => setActivityDescription(e.target.value)}
-                      placeholder="কার্যক্রমের বিবরণ"
-                      required
+                      onTextChange={(e) => setActivityDescription(e.htmlValue)}
+                      style={{ height: '200px' }}
+                      placeholder="কার্যক্রমের বিবরণ লিখুন..."
                     />
                   </div>
                   <div className="space-y-2">
@@ -2344,266 +2421,210 @@ export default function AdminPanel() {
     </div>
   );
 
-  const renderActivityList = () => (
-    <div className="space-y-4">
-      {isLoadingActivities ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-          <p className="ml-2">লোড হচ্ছে...</p>
+  const renderActivityList = () => {
+    if (activities.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500">কোন কার্যক্রম নেই</p>
         </div>
-      ) : (
-        [...activities]
-          .sort((a, b) => new Date(b.time) - new Date(a.time))
-          .map((activity) => (
-            <div
-              key={activity.id}
-              className="p-4 border rounded-lg space-y-3 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium text-lg">{activity.title}</p>
-                  <p className="text-sm text-gray-500">{activity.description}</p>
-                  <p className="text-sm">সময়: {formatDateTime(activity.time)}</p>
-                  <p className="text-sm">স্থান: {activity.location}</p>
-                </div>
-                <div className="space-y-2">
-                  <Badge className={`${
-                    activity.status === 'UPCOMING' ? 'bg-blue-100 text-blue-800' :
-                    activity.status === 'ONGOING' ? 'bg-green-100 text-green-800' :
-                    activity.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {activity.status === 'UPCOMING' ? 'আসন্ন' :
-                     activity.status === 'ONGOING' ? 'চলমান' :
-                     activity.status === 'COMPLETED' ? 'সম্পন্ন' :
-                     'বাতিল'}
-                  </Badge>
-                  <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                      onClick={() => {
-                        setEditingActivity(activity);
-                        setNewActivityData({
-                          title: activity.title,
-                          description: activity.description,
-                          time: new Date(activity.time).toISOString().slice(0, 16),
-                          location: activity.location
-                        });
-                        setIsActivityDialogOpen(true);
-                      }}
-                      disabled={isUpdatingActivity === activity.id}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      এডিট
-                    </Button>
-                    <AlertDialog 
-                      open={isActivityDeleteDialogOpen && activityToDelete === activity.id} 
-                      onOpenChange={(open) => {
-                        if (!open) {
-                          setIsActivityDeleteDialogOpen(false);
-                          setActivityToDelete(null);
-                        }
-                      }}
-                    >
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-red-100 text-red-800 hover:bg-red-200"
-                          onClick={() => {
-                            setActivityToDelete(activity.id);
-                            setIsActivityDeleteDialogOpen(true);
-                          }}
-                          disabled={isUpdatingActivity === activity.id}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          মুছুন
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            এই কার্যক্রমটি মুছে ফেলা হবে। এই ক্রিয়াটি অপরিবর্তনীয়।
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel disabled={isUpdatingActivity === activity.id}>
-                            বাতিল
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleActivityDelete(activity.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                            disabled={isUpdatingActivity === activity.id}
-                          >
-                            {isUpdatingActivity === activity.id ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                মুছে ফেলা হচ্ছে...
-                              </>
-                            ) : (
-                              'মুছে ফেলুন'
-                            )}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                  <div className="space-x-2">
-                    {activity.status === 'UPCOMING' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-green-100 text-green-800 hover:bg-green-200"
-                        onClick={() => handleActivityStatusUpdate(activity.id, 'ONGOING')}
-                        disabled={isUpdatingActivity === activity.id}
-                      >
-                        শুরু করুন
-                      </Button>
-                    )}
-                    {activity.status === 'ONGOING' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-gray-100 text-gray-800 hover:bg-gray-200"
-                        onClick={() => handleActivityStatusUpdate(activity.id, 'COMPLETED')}
-                        disabled={isUpdatingActivity === activity.id}
-                      >
-                        সম্পন্ন করুন
-                      </Button>
-                    )}
-                    {(activity.status === 'UPCOMING' || activity.status === 'ONGOING') && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-red-100 text-red-800 hover:bg-red-200"
-                        onClick={() => handleActivityStatusUpdate(activity.id, 'CANCELLED')}
-                        disabled={isUpdatingActivity === activity.id}
-                      >
-                        বাতিল করুন
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))
-      )}
+      );
+    }
 
-      {/* Activity Edit Dialog */}
-      <Dialog open={isActivityDialogOpen} onOpenChange={setIsActivityDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>কার্যক্রম সম্পাদনা</DialogTitle>
-            <DialogDescription>
-              কার্যক্রমের তথ্য আপডেট করুন
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">শিরোনাম</Label>
-                <Input
-                  id="title"
-                  value={newActivityData.title}
-                  onChange={(e) => setNewActivityData({
-                    ...newActivityData,
-                    title: e.target.value
-                  })}
-                  placeholder="কার্যক্রমের শিরোনাম"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">বিবরণ</Label>
-                <Input
-                  id="description"
-                  value={newActivityData.description}
-                  onChange={(e) => setNewActivityData({
-                    ...newActivityData,
-                    description: e.target.value
-                  })}
-                  placeholder="কার্যক্রমের বিবরণ"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time">সময়</Label>
-                <Input
-                  id="time"
-                  type="datetime-local"
-                  value={newActivityData.time}
-                  onChange={(e) => setNewActivityData({
-                    ...newActivityData,
-                    time: e.target.value
-                  })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="location">স্থান</Label>
-                <Input
-                  id="location"
-                  value={newActivityData.location}
-                  onChange={(e) => setNewActivityData({
-                    ...newActivityData,
-                    location: e.target.value
-                  })}
-                  placeholder="কার্যক্রমের স্থান"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
+    return activities.map((activity) => (
+      <div key={activity.id} className="border rounded-lg p-4 flex justify-between items-start">
+        <div className="space-y-2 flex-1">
+          <p className="font-medium text-lg">{activity.title}</p>
+          {/* Replace the simple text rendering with proper HTML rendering */}
+          <div 
+            className="text-sm text-gray-500 prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: activity.description }}
+          />
+          <p className="text-sm">সময়: {formatDateTime(activity.time)}</p>
+          <p className="text-sm">স্থান: {activity.location}</p>
+        </div>
+        <div className="space-y-2">
+          {/* Rest of the code remains the same */}
+          <Badge className={`${getStatusColor(activity.status)}`}>
+            {getStatusText(activity.status)}
+          </Badge>
+          {/* Rest of your buttons and dialogs */}
+          <div className="flex space-x-2">
             <Button
+              size="sm"
               variant="outline"
-              onClick={() => {
-                setIsActivityDialogOpen(false);
-                setEditingActivity(null);
-                setNewActivityData({
-                  title: '',
-                  description: '',
-                  time: '',
-                  location: ''
-                });
+              className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+              onClick={() => handleEditClick(activity)}
+              disabled={isUpdatingActivity === activity.id}
+            >
+              <Edit className="h-3.5 w-3.5 mr-1" />
+              সম্পাদনা
+            </Button>
+            <AlertDialog 
+              open={isActivityDeleteDialogOpen && activityToDelete === activity.id} 
+              onOpenChange={(open) => {
+                if (!open) {
+                  setIsActivityDeleteDialogOpen(false);
+                  setActivityToDelete(null);
+                }
               }}
-              disabled={isUpdatingActivity === editingActivity?.id}
             >
-              বাতিল
-            </Button>
-            <Button
-              onClick={() => handleActivityUpdate(editingActivity.id, newActivityData)}
-              disabled={isUpdatingActivity === editingActivity?.id}
-              isLoading={isUpdatingActivity === editingActivity?.id}
-            >
-              আপডেট করুন
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-red-100 text-red-800 hover:bg-red-200"
+                  onClick={() => {
+                    setActivityToDelete(activity.id);
+                    setIsActivityDeleteDialogOpen(true);
+                  }}
+                  disabled={isUpdatingActivity === activity.id}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  মুছুন
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    এই কার্যক্রমটি মুছে ফেলা হবে। এই ক্রিয়াটি অপরিবর্তনীয়।
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isUpdatingActivity === activity.id}>
+                    বাতিল
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => handleActivityDelete(activity.id)}
+                    className="bg-red-600 hover:bg-red-700"
+                    disabled={isUpdatingActivity === activity.id}
+                  >
+                    {isUpdatingActivity === activity.id ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        মুছে ফেলা হচ্ছে...
+                      </>
+                    ) : (
+                      'মুছে ফেলুন'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+          <div className="space-x-2">
+            {activity.status === 'UPCOMING' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-green-100 text-green-800 hover:bg-green-200"
+                onClick={() => handleActivityStatusUpdate(activity.id, 'ONGOING')}
+                disabled={isUpdatingActivity === activity.id}
+              >
+                {isUpdatingActivity === activity.id ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-800" />
+                ) : (
+                  <>
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                শুরু করুন
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {(activity.status === 'UPCOMING' || activity.status === 'ONGOING') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-red-100 text-red-800 hover:bg-red-200"
+                onClick={() => handleActivityStatusUpdate(activity.id, 'CANCELLED')}
+                disabled={isUpdatingActivity === activity.id}
+              >
+                {isUpdatingActivity === activity.id ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-800" />
+                ) : (
+                  <>
+                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                    বাতিল করুন
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {activity.status === 'ONGOING' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-gray-100 text-gray-800 hover:bg-gray-200"
+                onClick={() => handleActivityStatusUpdate(activity.id, 'COMPLETED')}
+                disabled={isUpdatingActivity === activity.id}
+              >
+                {isUpdatingActivity === activity.id ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800" />
+                ) : (
+                  <>
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                    সম্পন্ন করুন
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    ));
+  };
 
-  // Add this function to handle activity updates
-  const handleActivityUpdate = async (activityId, updatedData) => {
-    setIsUpdatingActivity(activityId);
+  // Update the handleActivityUpdate function
+  const handleActivityUpdate = async (id, updatedData) => {
+    setIsUpdatingActivity(id);
+    
     try {
-      const response = await fetch(`/api/activities/${activityId}`, {
+      // Ensure we have a valid date object before converting to ISO string
+      let formattedTime;
+      try {
+        // Parse the date string and adjust for timezone
+        const dateObj = new Date(updatedData.time);
+        if (isNaN(dateObj.getTime())) {
+          throw new Error('Invalid date');
+        }
+        formattedTime = dateObj.toISOString();
+      } catch (error) {
+        console.error('Date parsing error:', error);
+        alert('অবৈধ তারিখ ফরম্যাট');
+        return;
+      }
+      
+      const response = await fetch(`/api/activities/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify({
+          ...updatedData,
+          time: formattedTime
+        }),
       });
-
-      if (response.ok) {
-        // Close the dialog first
-        setIsActivityDialogOpen(false);
-        setEditingActivity(null);
-        // Then refresh the data
-        await fetchActivities();
-      } else {
-        alert('কার্যক্রম আপডেট করতে সমস্যা হয়েছে');
+      
+      if (!response.ok) {
+        throw new Error('Failed to update activity');
       }
+      
+      const updatedActivity = await response.json();
+      
+      // Update the activity in state
+      setActivities(activities.map(activity => 
+        activity.id === id ? updatedActivity : activity
+      ));
+      
+      // Close the dialog
+      setIsActivityDialogOpen(false);
+      setEditingActivity(null);
+      
+      // Replace alert with success dialog
+      setSuccessMessage('কার্যক্রম সফলভাবে আপডেট করা হয়েছে');
+      setShowSuccessDialog(true);
     } catch (error) {
       console.error('Error updating activity:', error);
       alert('কার্যক্রম আপডেট করতে সমস্যা হয়েছে');
@@ -2768,6 +2789,51 @@ export default function AdminPanel() {
       setRegistrationToApprove(null);
     }
   };
+
+  // Add this function near your other handler functions
+  const handleEditClick = (activity) => {
+    setEditingActivity(activity);
+    
+    // Format the time properly for the datetime-local input
+    const formattedTime = new Date(activity.time);
+    formattedTime.setMinutes(formattedTime.getMinutes() - formattedTime.getTimezoneOffset());
+    const timeString = formattedTime.toISOString().slice(0, 16);
+    
+    setNewActivityData({
+      title: activity.title,
+      description: activity.description, // PrimeReact Editor will handle HTML content
+      time: timeString,
+      location: activity.location
+    });
+    
+    setIsActivityDialogOpen(true);
+  };
+
+  // Add this new Dialog component near your other dialogs
+  const SuccessDialog = ({ message, isOpen, onClose }) => (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-center flex items-center justify-center gap-2">
+            <CheckCircle className="h-6 w-6 text-green-500" />
+            সফল হয়েছে
+          </DialogTitle>
+        </DialogHeader>
+        <div className="text-center py-4">
+          <p className="text-gray-600">{message}</p>
+        </div>
+        <DialogFooter className="sm:justify-center">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700"
+          >
+            ঠিক আছে
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (isLoading) {
     return (
@@ -2991,6 +3057,103 @@ export default function AdminPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Activity Edit Dialog */}
+      <Dialog open={isActivityDialogOpen} onOpenChange={setIsActivityDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>কার্যক্রম সম্পাদনা</DialogTitle>
+            <DialogDescription>
+              কার্যক্রমের তথ্য আপডেট করুন
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">শিরোনাম</Label>
+                <Input
+                  id="title"
+                  value={newActivityData.title}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    title: e.target.value
+                  })}
+                  placeholder="কার্যক্রমের শিরোনাম"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">বিবরণ</Label>
+                <Editor
+                  id="description"
+                  value={newActivityData.description}
+                  onTextChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    description: e.htmlValue
+                  })}
+                  style={{ height: '200px' }}
+                  placeholder="কার্যক্রমের বিবরণ লিখুন..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time">সময়</Label>
+                <Input
+                  id="time"
+                  type="datetime-local"
+                  value={newActivityData.time}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    time: e.target.value
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="location">স্থান</Label>
+                <Input
+                  id="location"
+                  value={newActivityData.location}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    location: e.target.value
+                  })}
+                  placeholder="কার্যক্রমের স্থান"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsActivityDialogOpen(false);
+                setEditingActivity(null);
+              }}
+              disabled={isUpdatingActivity === editingActivity?.id}
+            >
+              বাতিল
+            </Button>
+            <Button
+              onClick={() => handleActivityUpdate(editingActivity.id, newActivityData)}
+              disabled={isUpdatingActivity === editingActivity?.id}
+            >
+              {isUpdatingActivity === editingActivity?.id ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  আপডেট হচ্ছে...
+                </>
+              ) : (
+                'আপডেট করুন'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add this near the end, before the closing div */}
+      <SuccessDialog 
+        message={successMessage}
+        isOpen={showSuccessDialog}
+        onClose={() => setShowSuccessDialog(false)}
+      />
     </div>
   );
 } 

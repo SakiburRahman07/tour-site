@@ -182,17 +182,10 @@ export default function Schedule() {
                             </Badge>
                           </div>
                           
-                          <div className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            {activity.description && activity.description.startsWith('{') ? (
-                              <Editor 
-                                editorSerializedState={JSON.parse(activity.description)}
-                                readOnly={true}
-                                className="prose prose-sm max-w-none"
-                              />
-                            ) : (
-                              <p>{activity.description}</p>
-                            )}
-                          </div>
+                          <div 
+                            className="text-xs sm:text-sm text-gray-600 leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: activity.description }}
+                          />
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                             <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600">
