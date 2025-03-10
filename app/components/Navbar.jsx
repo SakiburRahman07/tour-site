@@ -38,7 +38,8 @@ import {
   FileText, 
   Info, 
   LogIn,
-  Clock
+  Clock,
+  Wallet
 } from "lucide-react";
 
 export default function Navbar() {
@@ -58,6 +59,7 @@ export default function Navbar() {
     { href: "/packages", label: "ট্যুর বিবরণ", icon: Package },
     { href: "/registration", label: "রেজিস্ট্রেশন", icon: FileText },
     { href: "/schedule", label: "কার্যক্রম", icon: Clock },
+    { href: "/expenses", label: "খরচের হিসাব", icon: Wallet },
     { href: "/user-info", label: "আপনার তথ্য", icon: User },
     { href: "/emergency", label: "জরুরি নম্বর", icon: PhoneCall },
     { href: "/about", label: "আমাদের সম্পর্কে", icon: Info },
@@ -159,7 +161,7 @@ export default function Navbar() {
                       ট্যুর প্ল্যানার
                     </SheetTitle>
                   </SheetHeader>
-                  <div className="mt-8 space-y-6">
+                  <div className="mt-8 space-y-6 max-h-[calc(100vh-8rem)] overflow-y-auto pr-4">
                     {navLinks.map((link) => (
                       <Link 
                         key={link.href} 
