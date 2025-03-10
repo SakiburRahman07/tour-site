@@ -178,6 +178,9 @@ export default function AdminPanel() {
     createdAt: ''
   });
 
+  // Add this state variable at the top with other state declarations
+  const [isUpdatingExpense, setIsUpdatingExpense] = useState(null);
+
   // Check for existing session on component mount
   useEffect(() => {
     const checkSession = () => {
