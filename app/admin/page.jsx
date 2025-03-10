@@ -164,6 +164,20 @@ export default function AdminPanel() {
   const [isActivityDeleteDialogOpen, setIsActivityDeleteDialogOpen] = useState(false);
   const [activityToDelete, setActivityToDelete] = useState(null);
 
+  // Add these state variables at the top with other state declarations
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
+  const [isExpenseDeleteDialogOpen, setIsExpenseDeleteDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState(null);
+  const [newExpenseData, setNewExpenseData] = useState({
+    description: '',
+    amount: '',
+    category: '',
+    note: '',
+    createdAt: ''
+  });
+
   // Check for existing session on component mount
   useEffect(() => {
     const checkSession = () => {
@@ -877,9 +891,10 @@ export default function AdminPanel() {
       case 'expenses':
         return (
           <div className="space-y-6">
+            {/* Existing expense form card */}
             <Card>
               <CardHeader>
-                <CardTitle>নতুন খরচ যোগ করুন</CardTitle>
+                <CardTitle>খরচ যোগ করুন</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -947,32 +962,224 @@ export default function AdminPanel() {
               </CardContent>
             </Card>
 
+            {/* Expenses List */}
             <Card>
               <CardHeader>
-                <CardTitle>সাম্প্রতিক খরচ</CardTitle>
+                <CardTitle>খরচের তালিকা</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {expenses.map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex justify-between items-start p-4 border rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{expense.description}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline">{expense.category}</Badge>
-                          <p className="text-sm text-gray-500">
-                            {formatDate(expense.createdAt)}
-                          </p>
-                        </div>
-                        {expense.note && (
-                          <p className="text-sm text-gray-600 mt-1">{expense.note}</p>
-                        )}
-                      </div>
-                      <p className="font-bold">{formatCurrency(expense.amount)}</p>
+                  {isLoadingExpenses ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                      <p className="ml-2">লোড হচ্ছে...</p>
                     </div>
-                  ))}
+                  ) : (
+                    expenses.map((expense) => (
+                      <div
+                        key={expense.id}
+                        className="p-4 border rounded-lg space-y-3 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-lg">{expense.description}</p>
+                            <p className="text-sm font-medium">পরিমাণ: {formatCurrency(expense.amount)}</p>
+                            <p className="text-sm">ক্যাটাগরি: {expense.category}</p>
+                            {expense.note && (
+                              <p className="text-sm text-gray-600">নোট: {expense.note}</p>
+                            )}
+                            <p className="text-sm text-gray-500">{formatDateTime(expense.createdAt)}</p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                              onClick={() => {
+                                setEditingExpense(expense);
+                                setNewExpenseData({
+                                  description: expense.description,
+                                  amount: expense.amount.toString(),
+                                  category: expense.category,
+                                  note: expense.note || '',
+                                  createdAt: new Date(expense.createdAt).toISOString().slice(0, 16)
+                                });
+                                setIsExpenseDialogOpen(true);
+                              }}
+                              disabled={deletingExpenseId === expense.id}
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              এডিট
+                            </Button>
+                            <AlertDialog
+                              open={isExpenseDeleteDialogOpen && expenseToDelete === expense.id}
+                              onOpenChange={(open) => {
+                                if (!open) {
+                                  setIsExpenseDeleteDialogOpen(false);
+                                  setExpenseToDelete(null);
+                                }
+                              }}
+                            >
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-red-100 text-red-800 hover:bg-red-200"
+                                  onClick={() => {
+                                    setExpenseToDelete(expense.id);
+                                    setIsExpenseDeleteDialogOpen(true);
+                                  }}
+                                  disabled={deletingExpenseId === expense.id}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  মুছুন
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    এই খরচটি মুছে ফেলা হবে। এই ক্রিয়াটি অপরিবর্তনীয়।
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel disabled={deletingExpenseId === expense.id}>
+                                    বাতিল
+                                  </AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleExpenseDelete(expense.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                    disabled={deletingExpenseId === expense.id}
+                                  >
+                                    {deletingExpenseId === expense.id ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        মুছে ফেলা হচ্ছে...
+                                      </>
+                                    ) : (
+                                      'মুছে ফেলুন'
+                                    )}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {/* Expense Edit Dialog */}
+                  <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>খরচ সম্পাদনা</DialogTitle>
+                        <DialogDescription>
+                          খরচের তথ্য আপডেট করুন
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="py-4">
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="description">বিবরণ</Label>
+                            <Input
+                              id="description"
+                              value={newExpenseData.description}
+                              onChange={(e) => setNewExpenseData({
+                                ...newExpenseData,
+                                description: e.target.value
+                              })}
+                              placeholder="খরচের বিবরণ"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="amount">পরিমাণ</Label>
+                            <Input
+                              id="amount"
+                              type="number"
+                              value={newExpenseData.amount}
+                              onChange={(e) => setNewExpenseData({
+                                ...newExpenseData,
+                                amount: e.target.value
+                              })}
+                              placeholder="টাকার পরিমাণ"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="category">ক্যাটাগরি</Label>
+                            <Select
+                              value={newExpenseData.category}
+                              onValueChange={(value) => setNewExpenseData({
+                                ...newExpenseData,
+                                category: value
+                              })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="ক্যাটাগরি বাছাই করুন" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="FOOD">খাবার</SelectItem>
+                                <SelectItem value="TRANSPORT">পরিবহন</SelectItem>
+                                <SelectItem value="ACCOMMODATION">আবাসন</SelectItem>
+                                <SelectItem value="ACTIVITIES">কার্যক্রম</SelectItem>
+                                <SelectItem value="OTHERS">অন্যান্য</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="note">নোট</Label>
+                            <Input
+                              id="note"
+                              value={newExpenseData.note}
+                              onChange={(e) => setNewExpenseData({
+                                ...newExpenseData,
+                                note: e.target.value
+                              })}
+                              placeholder="অতিরিক্ত নোট"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="createdAt">তারিখ ও সময়</Label>
+                            <Input
+                              id="createdAt"
+                              type="datetime-local"
+                              value={newExpenseData.createdAt}
+                              onChange={(e) => setNewExpenseData({
+                                ...newExpenseData,
+                                createdAt: e.target.value
+                              })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsExpenseDialogOpen(false);
+                            setEditingExpense(null);
+                            setNewExpenseData({
+                              description: '',
+                              amount: '',
+                              category: '',
+                              note: '',
+                              createdAt: ''
+                            });
+                          }}
+                          disabled={isUpdatingExpense === editingExpense?.id}
+                        >
+                          বাতিল
+                        </Button>
+                        <Button
+                          onClick={() => handleExpenseUpdate(editingExpense.id, newExpenseData)}
+                          disabled={isUpdatingExpense === editingExpense?.id}
+                          isLoading={isUpdatingExpense === editingExpense?.id}
+                        >
+                          আপডেট করুন
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardContent>
             </Card>
@@ -2151,6 +2358,58 @@ export default function AdminPanel() {
       alert('কার্যক্রম মুছে ফেলতে সমস্যা হয়েছে');
     } finally {
       setIsUpdatingActivity(null);
+    }
+  };
+
+  // Add these functions to handle expense updates and deletion
+  const handleExpenseUpdate = async (expenseId, updatedData) => {
+    setIsUpdatingExpense(expenseId);
+    try {
+      const response = await fetch(`/api/expenses/${expenseId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData),
+      });
+
+      if (response.ok) {
+        // Close the dialog first
+        setIsExpenseDialogOpen(false);
+        setEditingExpense(null);
+        // Then refresh the data
+        await fetchExpenses();
+      } else {
+        alert('খরচ আপডেট করতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      alert('খরচ আপডেট করতে সমস্যা হয়েছে');
+    } finally {
+      setIsUpdatingExpense(null);
+    }
+  };
+
+  const handleExpenseDelete = async (expenseId) => {
+    setDeletingExpenseId(expenseId);
+    try {
+      const response = await fetch(`/api/expenses/${expenseId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchExpenses();
+        // Close the dialog after successful deletion
+        setIsExpenseDeleteDialogOpen(false);
+        setExpenseToDelete(null);
+      } else {
+        alert('খরচ মুছে ফেলতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      alert('খরচ মুছে ফেলতে সমস্যা হয়েছে');
+    } finally {
+      setDeletingExpenseId(null);
     }
   };
 
