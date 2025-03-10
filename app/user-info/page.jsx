@@ -261,7 +261,7 @@ export default function UserInfo() {
                           </div>
                           <div>
                             <p className="font-medium text-gray-700">
-                              {userInfo.balance >= 0 ? 'মোট টাকা পাওনা' : 'মোট টাকা দেনা'}
+                              {userInfo.balance >= 0 ? 'টাকা পাওনা' : 'টাকা দেনা'}
                             </p>
                             <p className={`text-xl font-semibold ${userInfo.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               {formatCurrency(Math.abs(userInfo.balance))}
