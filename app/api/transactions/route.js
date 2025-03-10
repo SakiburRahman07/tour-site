@@ -6,24 +6,48 @@ const prisma = new PrismaClient();
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { registrationId, amount, paymentMethod, description } = body;
+    const { registrationId, amount, paymentMethod, note, description, status } = body;
 
-    // Create the transaction record with PENDING status
+    // Create the transaction with the provided status or default to 'PENDING'
     const transaction = await prisma.transaction.create({
       data: {
+        registrationId,
         amount,
         paymentMethod,
+        note,
         description,
-        registrationId,
-        status: 'PENDING' // Set initial status as PENDING
-      }
+        status: status || 'PENDING', // Use provided status or default to 'PENDING'
+        paymentDate: new Date(),
+      },
     });
+
+    // If the status is APPROVED, update the registration's paid amount immediately
+    if (status === 'APPROVED') {
+      // Get the registration
+      const registration = await prisma.tourRegistration.findUnique({
+        where: { id: registrationId },
+      });
+
+      if (registration) {
+        // Update the paid amount and due amount
+        const newPaidAmount = registration.paidAmount + amount;
+        const newDueAmount = registration.totalAmount - newPaidAmount;
+
+        await prisma.tourRegistration.update({
+          where: { id: registrationId },
+          data: {
+            paidAmount: newPaidAmount,
+            dueAmount: newDueAmount,
+          },
+        });
+      }
+    }
 
     return NextResponse.json(transaction);
   } catch (error) {
-    console.error('Transaction error:', error);
+    console.error('Error creating transaction:', error);
     return NextResponse.json(
-      { error: 'Failed to process transaction' },
+      { error: 'Failed to create transaction' },
       { status: 500 }
     );
   }

@@ -39,10 +39,6 @@ export default function UserInfo() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('CASH');
-  const [paymentNote, setPaymentNote] = useState('');
-  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   // Fetch registered users on component mount
   useEffect(() => {
@@ -94,44 +90,6 @@ export default function UserInfo() {
     }
   };
 
-  const handlePayment = async () => {
-    if (!userInfo || !paymentAmount || !paymentMethod) {
-      setError('সব তথ্য দিন');
-      return;
-    }
-
-    setIsSubmittingPayment(true);
-    try {
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          registrationId: userInfo.id,
-          amount: parseFloat(paymentAmount),
-          paymentMethod,
-          note: paymentNote,
-          description: `Payment via ${paymentMethod}`,
-        }),
-      });
-
-      if (response.ok) {
-        // Refresh user info and transactions
-        handleSearch();
-        setPaymentAmount('');
-        setPaymentNote('');
-      } else {
-        setError('পেমেন্ট প্রক্রিয়াকরণে সমস্যা হয়েছে');
-      }
-    } catch (error) {
-      console.error('Payment error:', error);
-      setError('পেমেন্ট প্রক্রিয়াকরণে সমস্যা হয়েছে');
-    } finally {
-      setIsSubmittingPayment(false);
-    }
-  };
-
   const formatDateTime = (dateString) => {
     return new Date(dateString).toLocaleString('bn-BD', {
       year: 'numeric',
@@ -156,7 +114,7 @@ export default function UserInfo() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main Content */}
-          <div className="lg:w-2/3">
+          <div className="lg:w-full">
             <motion.div 
               initial="hidden"
               animate="visible"
@@ -313,154 +271,100 @@ export default function UserInfo() {
                   </Card>
                 </motion.div>
               )}
+              
+              {/* Transaction History */}
+              {userInfo && transactions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8"
+                >
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-purple-900">
+                        <History className="h-5 w-5 mr-2 text-purple-600" />
+                        লেনদেনের ইতিহাস
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {transactions.map((transaction) => (
+                          <div
+                            key={transaction.id}
+                            className={`flex items-center justify-between p-4 rounded-lg shadow-sm transition-all ${
+                              transaction.status === 'PENDING'
+                                ? 'bg-yellow-50 border border-yellow-200 hover:bg-yellow-100'
+                                : transaction.status === 'APPROVED'
+                                ? 'bg-green-50 border border-green-200 hover:bg-green-100'
+                                : 'bg-red-50 border border-red-200 hover:bg-red-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900">{formatCurrency(transaction.amount)}</p>
+                              <p className="text-sm text-gray-600">
+                                {formatDateTime(transaction.paymentDate)}
+                              </p>
+                              {transaction.note && (
+                                <p className="text-sm text-gray-700 mt-1">
+                                  {transaction.note}
+                                </p>
+                              )}
+                              <p className={`text-sm font-medium mt-1 ${
+                                transaction.status === 'PENDING'
+                                  ? 'text-yellow-700'
+                                  : transaction.status === 'APPROVED'
+                                  ? 'text-green-700'
+                                  : 'text-red-700'
+                              }`}>
+                                {transaction.status === 'PENDING' && 'অপেক্ষমান'}
+                                {transaction.status === 'APPROVED' && 'অনুমোদিত'}
+                                {transaction.status === 'REJECTED' && 'বাতিল'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-purple-600">{transaction.paymentMethod}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+              
+              {/* Ticket Information */}
+              {userInfo && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8"
+                >
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-purple-900">
+                        <Ticket className="h-5 w-5 mr-2 text-purple-600" />
+                        টিকেট তথ্য
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-700">টিকেট নম্বর</span>
+                          <span className="font-medium text-purple-600">#{userInfo.id.toString().padStart(4, '0')}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-700">স্ট্যাটাস</span>
+                          <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            {userInfo.status}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
             </motion.div>
           </div>
-
-          {/* Sidebar */}
-          {userInfo && (
-            <div className="lg:w-1/3">
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
-              >
-                {/* Payment Section */}
-                <Card className="shadow-lg">
-                  <CardHeader>
-                    <CardTitle className="flex items-center text-purple-900">
-                      <CreditCard className="h-5 w-5 mr-2 text-purple-600" />
-                      টাকা জমা দিন
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">টাকার পরিমাণ</label>
-                      <Input
-                        type="number"
-                        value={paymentAmount}
-                        onChange={(e) => setPaymentAmount(e.target.value)}
-                        placeholder="টাকার পরিমাণ দিন"
-                        className="border-gray-200 focus:ring-purple-500 focus:border-purple-500"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">পেমেন্ট মাধ্যম</label>
-                      <Select
-                        value={paymentMethod}
-                        onValueChange={setPaymentMethod}
-                      >
-                        <SelectTrigger className="border-gray-200 focus:ring-purple-500 focus:border-purple-500">
-                          <SelectValue placeholder="পেমেন্ট মাধ্যম বাছাই করুন" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CASH">ক্যাশ</SelectItem>
-                          <SelectItem value="BKASH">বিকাশ</SelectItem>
-                          <SelectItem value="NAGAD">নগদ</SelectItem>
-                          <SelectItem value="ROCKET">রকেট</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">নোট (ঐচ্ছিক)</label>
-                      <Input
-                        value={paymentNote}
-                        onChange={(e) => setPaymentNote(e.target.value)}
-                        placeholder="পেমেন্ট সম্পর্কে নোট লিখুন"
-                        className="border-gray-200 focus:ring-purple-500 focus:border-purple-500"
-                      />
-                    </div>
-                    <Button
-                      onClick={handlePayment}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-                      isLoading={isSubmittingPayment}
-                      disabled={isSubmittingPayment}
-                    >
-                      {isSubmittingPayment ? 'প্রক্রিয়াকরণ হচ্ছে...' : 'টাকা জমা দিন'}
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Transaction History */}
-                <Card className="shadow-lg">
-                  <CardHeader>
-                    <CardTitle className="flex items-center text-purple-900">
-                      <History className="h-5 w-5 mr-2 text-purple-600" />
-                      লেনদেনের ইতিহাস
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {transactions.map((transaction) => (
-                        <div
-                          key={transaction.id}
-                          className={`flex items-center justify-between p-4 rounded-lg shadow-sm transition-all ${
-                            transaction.status === 'PENDING'
-                              ? 'bg-yellow-50 border border-yellow-200 hover:bg-yellow-100'
-                              : transaction.status === 'APPROVED'
-                              ? 'bg-green-50 border border-green-200 hover:bg-green-100'
-                              : 'bg-red-50 border border-red-200 hover:bg-red-100'
-                          }`}
-                        >
-                          <div>
-                            <p className="font-medium text-gray-900">{formatCurrency(transaction.amount)}</p>
-                            <p className="text-sm text-gray-600">
-                              {formatDateTime(transaction.paymentDate)}
-                            </p>
-                            {transaction.note && (
-                              <p className="text-sm text-gray-700 mt-1">
-                                {transaction.note}
-                              </p>
-                            )}
-                            <p className={`text-sm font-medium mt-1 ${
-                              transaction.status === 'PENDING'
-                                ? 'text-yellow-700'
-                                : transaction.status === 'APPROVED'
-                                ? 'text-green-700'
-                                : 'text-red-700'
-                            }`}>
-                              {transaction.status === 'PENDING' && 'অপেক্ষমান'}
-                              {transaction.status === 'APPROVED' && 'অনুমোদিত'}
-                              {transaction.status === 'REJECTED' && 'বাতিল'}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-purple-600">{transaction.paymentMethod}</p>
-                          </div>
-                        </div>
-                      ))}
-                      {transactions.length === 0 && (
-                        <p className="text-center text-gray-500 py-4">কোন লেনদেন নেই</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Ticket Information */}
-                <Card className="shadow-lg">
-                  <CardHeader>
-                    <CardTitle className="flex items-center text-purple-900">
-                      <Ticket className="h-5 w-5 mr-2 text-purple-600" />
-                      টিকেট তথ্য
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-700">টিকেট নম্বর</span>
-                        <span className="font-medium text-purple-600">#{userInfo.id.toString().padStart(4, '0')}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-700">স্ট্যাটাস</span>
-                        <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                          {userInfo.status}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-          )}
         </div>
       </main>
 

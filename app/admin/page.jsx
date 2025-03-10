@@ -21,7 +21,11 @@ import {
   Link,
   Calendar,
   Edit,
-  Trash2
+  Trash2,
+  User,
+  Phone,
+  MapPin,
+  Search
 } from "lucide-react";
 import {
   Sheet,
@@ -114,7 +118,33 @@ export default function AdminPanel() {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editingActivity, setEditingActivity] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [userPhoneNumber, setUserPhoneNumber] = useState('');
+  const [userInfo, setUserInfo] = useState(null);
+  const [userTransactions, setUserTransactions] = useState([]);
+  const [searchingUser, setSearchingUser] = useState(false);
+  const [userSearchError, setUserSearchError] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [selectedUserInfo, setSelectedUserInfo] = useState('');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const router = useRouter();
+
+  // Add these new loading state variables at the top with other state declarations
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+  const [isLoadingRegistrations, setIsLoadingRegistrations] = useState(false);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+
+  // Add this to the state declarations at the top
+  const [deletingTransactionId, setDeletingTransactionId] = useState(null);
+
+  // Add this state variable with the other state declarations at the top
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
 
   // Check for existing session on component mount
   useEffect(() => {
@@ -197,8 +227,9 @@ export default function AdminPanel() {
       await Promise.all([
         fetchExpenses(),
         fetchRegistrations(),
-        fetchPendingTransactions(),
-        fetchActivities()
+        fetchAllTransactions(),
+        fetchActivities(),
+        fetchAllUsers()
       ]);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -208,27 +239,70 @@ export default function AdminPanel() {
   };
 
   const fetchExpenses = async () => {
-    const response = await fetch('/api/expenses');
-    const data = await response.json();
-    setExpenses(data);
+    setIsLoadingExpenses(true);
+    try {
+      const response = await fetch('/api/expenses');
+      const data = await response.json();
+      setExpenses(data);
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+    } finally {
+      setIsLoadingExpenses(false);
+    }
   };
 
   const fetchRegistrations = async () => {
-    const response = await fetch('/api/tour-registration');
-    const data = await response.json();
-    setRegistrations(data);
+    setIsLoadingRegistrations(true);
+    try {
+      const response = await fetch('/api/tour-registration');
+      const data = await response.json();
+      setRegistrations(data);
+    } catch (error) {
+      console.error('Error fetching registrations:', error);
+    } finally {
+      setIsLoadingRegistrations(false);
+    }
   };
 
-  const fetchPendingTransactions = async () => {
-    const response = await fetch('/api/transactions');
-    const data = await response.json();
-    setPendingTransactions(data);
+  const fetchAllTransactions = async () => {
+    setIsLoadingTransactions(true);
+    try {
+      const response = await fetch('/api/transactions/all');
+      const data = await response.json();
+      setPendingTransactions(data);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    } finally {
+      setIsLoadingTransactions(false);
+    }
   };
 
   const fetchActivities = async () => {
-    const response = await fetch('/api/activities');
-    const data = await response.json();
-    setActivities(data);
+    setIsLoadingActivities(true);
+    try {
+      const response = await fetch('/api/activities');
+      const data = await response.json();
+      setActivities(data);
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+    } finally {
+      setIsLoadingActivities(false);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const response = await fetch('/api/tour-registration');
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -449,6 +523,16 @@ export default function AdminPanel() {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    return new Date(dateString).toLocaleString('bn-BD', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const getStatusBadge = (status) => {
     const styles = {
       PENDING: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
@@ -476,7 +560,146 @@ export default function AdminPanel() {
     { id: 'transactions', label: 'লেনদেন', icon: History },
     { id: 'tickets', label: 'টিকেট', icon: Ticket },
     { id: 'activities', label: 'কার্যক্রম', icon: Calendar },
+    { id: 'userinfo', label: 'ব্যবহারকারী তথ্য', icon: User },
   ];
+
+  const handleUserSearch = async () => {
+    if (!selectedUserInfo) {
+      setUserSearchError('ব্যবহারকারী নির্বাচন করুন');
+      return;
+    }
+
+    // Extract phone from the selected user info (format: "Name - Phone")
+    const phone = selectedUserInfo.split(' - ')[1];
+    
+    setSearchingUser(true);
+    setUserSearchError('');
+    setUserInfo(null);
+    setUserTransactions([]);
+
+    try {
+      const response = await fetch(`/api/tour-registration/search?phone=${phone}`);
+      const data = await response.json();
+
+      if (response.ok && data) {
+        setUserInfo(data);
+        // Fetch transactions for this registration
+        const transResponse = await fetch(`/api/transactions/${data.id}`);
+        if (transResponse.ok) {
+          const transData = await transResponse.json();
+          setUserTransactions(transData);
+        }
+      } else {
+        setUserSearchError('কোন তথ্য পাওয়া যায়নি');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setUserSearchError('তথ্য খোঁজার সময় সমস্যা হয়েছে');
+    } finally {
+      setSearchingUser(false);
+    }
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!userInfo || !paymentAmount || !paymentMethod) {
+      setUserSearchError('সব তথ্য দিন');
+      return;
+    }
+
+    setIsSubmittingPayment(true);
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          registrationId: userInfo.id,
+          amount: parseFloat(paymentAmount),
+          paymentMethod,
+          note: paymentNote, // Make sure note is included
+          description: `Payment via ${paymentMethod}`,
+          status: 'APPROVED',
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh user info and transactions
+        handleUserSearch();
+        setPaymentAmount('');
+        setPaymentNote(''); // Clear note after successful submission
+      } else {
+        setUserSearchError('পেমেন্ট প্রক্রিয়াকরণে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      setUserSearchError('পেমেন্ট প্রক্রিয়াকরণে সমস্যা হয়েছে');
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
+
+  const handleEditTransaction = async (updatedTransaction) => {
+    setIsUpdatingTransaction(updatedTransaction.id);
+    try {
+      const response = await fetch(`/api/transactions/${updatedTransaction.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: updatedTransaction.amount,
+          paymentMethod: updatedTransaction.paymentMethod,
+          note: updatedTransaction.note,
+          status: updatedTransaction.status,
+        }),
+      });
+
+      if (response.ok) {
+        // Close the dialog first
+        setIsEditDialogOpen(false);
+        setEditingTransaction(null);
+        // Then refresh the data
+        await fetchAllTransactions();
+        // Scroll to top after update
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert('লেনদেন আপডেট করতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      alert('লেনদেন আপডেট করতে সমস্যা হয়েছে');
+    } finally {
+      setIsUpdatingTransaction(null);
+    }
+  };
+
+  // Update the handleDeleteTransaction function to manage dialog state
+  const handleDeleteTransaction = async (transactionId) => {
+    setDeletingTransactionId(transactionId);
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Refresh the data first
+        await fetchAllTransactions();
+        // Then close the dialog only after successful deletion
+        setIsDeleteDialogOpen(false);
+        setTransactionToDelete(null);
+        // Scroll to top after delete
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert('লেনদেন মুছে ফেলতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('লেনদেন মুছে ফেলতে সমস্যা হয়েছে');
+    } finally {
+      setDeletingTransactionId(null);
+    }
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -981,6 +1204,250 @@ export default function AdminPanel() {
           </div>
         );
 
+      case 'userinfo':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>ব্যবহারকারীর তথ্য খুঁজুন</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="userSelect">ব্যবহারকারী নির্বাচন করুন</Label>
+                    <div className="flex space-x-2">
+                      <div className="relative flex-1">
+                        <Select
+                          value={selectedUserInfo}
+                          onValueChange={setSelectedUserInfo}
+                          disabled={isLoadingUsers}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={
+                              isLoadingUsers 
+                                ? "ব্যবহারকারী লোড হচ্ছে..." 
+                                : "ব্যবহারকারী নির্বাচন করুন"
+                            } />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allUsers.map((user) => (
+                              <SelectItem key={user.id} value={`${user.name} - ${user.phone}`}>
+                                {user.name} - {user.phone}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button 
+                        onClick={handleUserSearch}
+                        isLoading={searchingUser}
+                      >
+                        <Search className="h-4 w-4 mr-2" />
+                        খুঁজুন
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {userSearchError && (
+                    <p className="text-red-600 text-center font-medium">{userSearchError}</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {userInfo && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <User className="h-5 w-5 mr-2 text-purple-600" />
+                      ব্যক্তিগত তথ্য
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex items-start space-x-3">
+                        <User className="h-5 w-5 text-purple-600 mt-1" />
+                        <div>
+                          <p className="font-medium text-gray-700">নাম</p>
+                          <p className="text-gray-900">{userInfo.name}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start space-x-3">
+                        <Phone className="h-5 w-5 text-purple-600 mt-1" />
+                        <div>
+                          <p className="font-medium text-gray-700">ফোন নম্বর</p>
+                          <p className="text-gray-900">{userInfo.phone}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="h-5 w-5 text-purple-600 mt-1" />
+                        <div>
+                          <p className="font-medium text-gray-700">ঠিকানা</p>
+                          <p className="text-gray-900">{userInfo.address}</p>
+                        </div>
+                      </div>
+
+                      {userInfo.ticketLink && (
+                        <div className="flex items-start space-x-3">
+                          <Ticket className="h-5 w-5 text-purple-600 mt-1" />
+                          <div>
+                            <p className="font-medium text-gray-700">টিকেট</p>
+                            <a 
+                              href={userInfo.ticketLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-purple-600 hover:text-purple-800 flex items-center transition-colors"
+                            >
+                              <Link className="h-4 w-4 mr-1" />
+                              টিকেট ডাউনলোড করুন
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <p className="font-medium text-gray-700">মোট টাকা</p>
+                          <p className="text-xl font-semibold text-purple-600">
+                            {formatCurrency(userInfo.totalAmount)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-700">জমা দেওয়া</p>
+                          <p className="text-xl font-semibold text-green-600">
+                            {formatCurrency(userInfo.paidAmount)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-700">বাকি টাকা</p>
+                          <p className="text-xl font-semibold text-red-600">
+                            {formatCurrency(userInfo.dueAmount)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Payment Section */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <CreditCard className="h-5 w-5 mr-2 text-purple-600" />
+                        টাকা জমা দিন
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>টাকার পরিমাণ</Label>
+                        <Input
+                          type="number"
+                          value={paymentAmount}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          placeholder="টাকার পরিমাণ দিন"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>পেমেন্ট মাধ্যম</Label>
+                        <Select
+                          value={paymentMethod}
+                          onValueChange={setPaymentMethod}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="পেমেন্ট মাধ্যম বাছাই করুন" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CASH">ক্যাশ</SelectItem>
+                            <SelectItem value="BKASH">বিকাশ</SelectItem>
+                            <SelectItem value="NAGAD">নগদ</SelectItem>
+                            <SelectItem value="ROCKET">রকেট</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>নোট (ঐচ্ছিক)</Label>
+                        <Input
+                          value={paymentNote}
+                          onChange={(e) => setPaymentNote(e.target.value)}
+                          placeholder="পেমেন্ট সম্পর্কে নোট লিখুন"
+                        />
+                      </div>
+                      <Button
+                        onClick={handlePaymentSubmit}
+                        className="w-full"
+                        isLoading={isSubmittingPayment}
+                      >
+                        টাকা জমা দিন
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Transaction History */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <History className="h-5 w-5 mr-2 text-purple-600" />
+                        লেনদেনের ইতিহাস
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                        {userTransactions.map((transaction) => (
+                          <div
+                            key={transaction.id}
+                            className={`flex items-center justify-between p-4 rounded-lg shadow-sm transition-all ${
+                              transaction.status === 'PENDING'
+                                ? 'bg-yellow-50 border border-yellow-200 hover:bg-yellow-100'
+                                : transaction.status === 'APPROVED'
+                                ? 'bg-green-50 border border-green-200 hover:bg-green-100'
+                                : 'bg-red-50 border border-red-200 hover:bg-red-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900">{formatCurrency(transaction.amount)}</p>
+                              <p className="text-sm text-gray-600">
+                                {formatDateTime(transaction.paymentDate)}
+                              </p>
+                              {transaction.note && (
+                                <p className="text-sm text-gray-700 mt-1">
+                                  {transaction.note}
+                                </p>
+                              )}
+                              <p className={`text-sm font-medium mt-1 ${
+                                transaction.status === 'PENDING'
+                                  ? 'text-yellow-700'
+                                  : transaction.status === 'APPROVED'
+                                  ? 'text-green-700'
+                                  : 'text-red-700'
+                              }`}>
+                                {transaction.status === 'PENDING' && 'অপেক্ষমান'}
+                                {transaction.status === 'APPROVED' && 'অনুমোদিত'}
+                                {transaction.status === 'REJECTED' && 'বাতিল'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-purple-600">{transaction.paymentMethod}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {userTransactions.length === 0 && (
+                          <p className="text-center text-gray-500 py-4">কোন লেনদেন নেই</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
+          </div>
+        );
+
       default:
         return null;
     }
@@ -988,134 +1455,387 @@ export default function AdminPanel() {
 
   const renderRegistrationList = () => (
     <div className="space-y-4">
-      {[...registrations]
-        .filter(reg => {
-          if (registrationFilter === 'ALL') return true;
-          if (registrationFilter === 'WITH_DUE') return reg.dueAmount > 0;
-          return reg.status === registrationFilter;
-        })
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .map((reg) => (
-          <div
-            key={reg.id}
-            className="p-4 border rounded-lg space-y-3 hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex justify-between items-start">
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <p className="font-medium text-lg">{reg.name}</p>
-                  {getStatusBadge(reg.status)}
+      {isLoadingRegistrations ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <p className="ml-2">লোড হচ্ছে...</p>
+        </div>
+      ) : (
+        [...registrations]
+          .filter(reg => {
+            if (registrationFilter === 'ALL') return true;
+            if (registrationFilter === 'WITH_DUE') return reg.dueAmount > 0;
+            return reg.status === registrationFilter;
+          })
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .map((reg) => (
+            <div
+              key={reg.id}
+              className="p-4 border rounded-lg space-y-3 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <p className="font-medium text-lg">{reg.name}</p>
+                    {getStatusBadge(reg.status)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">ফোন নম্বর</p>
+                      <p className="font-medium">{reg.phone}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">ঠিকানা</p>
+                      <p className="font-medium">{reg.address}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">রেজিস্ট্রেশন তারিখ</p>
+                      <p className="font-medium">{formatDate(reg.date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">অংশগ্রহণকারী</p>
+                      <p className="font-medium">{reg.participants} জন</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 mt-2">
+                    <div>
+                      <p className="text-sm text-gray-500">মোট টাকা</p>
+                      <p className="font-medium">{formatCurrency(reg.totalAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">জমা</p>
+                      <p className="font-medium">{formatCurrency(reg.paidAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">বাকি</p>
+                      <p className="font-medium">{formatCurrency(reg.dueAmount)}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">ফোন নম্বর</p>
-                    <p className="font-medium">{reg.phone}</p>
+                <div className="space-y-2">
+                  <div className="flex space-x-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-blue-100 text-blue-800 hover:bg-blue-200"
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          সম্পাদনা
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>রেজিস্ট্রেশন সম্পাদনা</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>নাম</Label>
+                            <Input
+                              defaultValue={reg.name}
+                              onChange={(e) => setEditingRegistration({
+                                ...editingRegistration,
+                                name: e.target.value
+                              })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>ফোন</Label>
+                            <Input
+                              defaultValue={reg.phone}
+                              onChange={(e) => setEditingRegistration({
+                                ...editingRegistration,
+                                phone: e.target.value
+                              })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>ঠিকানা</Label>
+                            <Input
+                              defaultValue={reg.address}
+                              onChange={(e) => setEditingRegistration({
+                                ...editingRegistration,
+                                address: e.target.value
+                              })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>অংশগ্রহণকারী সংখ্যা</Label>
+                            <Input
+                              type="number"
+                              defaultValue={reg.participants}
+                              onChange={(e) => setEditingRegistration({
+                                ...editingRegistration,
+                                participants: parseInt(e.target.value)
+                              })}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={() => handleRegistrationUpdate(reg.id, editingRegistration)}
+                            isLoading={isUpdatingRegistration === reg.id}
+                          >
+                            আপডেট করুন
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <AlertDialog open={isDeleteDialogOpen && reg.id === transactionToDelete} onOpenChange={(open) => {
+                      if (!open) {
+                        setIsDeleteDialogOpen(false);
+                        setTransactionToDelete(null);
+                      }
+                    }}>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-red-100 text-red-800 hover:bg-red-200"
+                          onClick={() => {
+                            setTransactionToDelete(reg.id);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          মুছুন
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            এই রেজিস্ট্রেশন মুছে ফেলা হবে। এই ক্রিয়া অপরিবর্তনীয়।
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={deletingTransactionId === reg.id}>বাতিল</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleRegistrationDelete(reg.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                            disabled={deletingTransactionId === reg.id}
+                          >
+                            {deletingTransactionId === reg.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                মুছে ফেলা হচ্ছে...
+                              </>
+                            ) : (
+                              'মুছে ফেলুন'
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">ঠিকানা</p>
-                    <p className="font-medium">{reg.address}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">রেজিস্ট্রেশন তারিখ</p>
-                    <p className="font-medium">{formatDate(reg.date)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">অংশগ্রহণকারী</p>
-                    <p className="font-medium">{reg.participants} জন</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 mt-2">
-                  <div>
-                    <p className="text-sm text-gray-500">মোট টাকা</p>
-                    <p className="font-medium">{formatCurrency(reg.totalAmount)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">জমা</p>
-                    <p className="font-medium">{formatCurrency(reg.paidAmount)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">বাকি</p>
-                    <p className="font-medium">{formatCurrency(reg.dueAmount)}</p>
-                  </div>
+                  {reg.status === 'PENDING' && (
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-green-100 text-green-800 hover:bg-green-200"
+                        onClick={() => handleStatusUpdate(reg.id, 'APPROVED')}
+                        isLoading={isUpdatingRegistration === reg.id}
+                        disabled={isUpdatingRegistration === reg.id}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        অনুমোদন
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-red-100 text-red-800 hover:bg-red-200"
+                        onClick={() => handleStatusUpdate(reg.id, 'REJECTED')}
+                        isLoading={isUpdatingRegistration === reg.id}
+                        disabled={isUpdatingRegistration === reg.id}
+                      >
+                        <XCircle className="h-4 w-4 mr-1" />
+                        বাতিল
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
+            </div>
+          ))
+      )}
+    </div>
+  );
+
+  const renderTransactionList = () => (
+    <div className="space-y-4">
+      {isLoadingTransactions ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <p className="ml-2">লোড হচ্ছে...</p>
+        </div>
+      ) : (
+        pendingTransactions.map((transaction) => (
+          <div
+            key={transaction.id}
+            className={`p-4 border rounded-lg space-y-3 ${
+              transaction.status === 'PENDING'
+                ? 'bg-yellow-50'
+                : transaction.status === 'APPROVED'
+                ? 'bg-green-50'
+                : 'bg-red-50'
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="font-medium text-lg">
+                  {transaction.tourRegistration.name}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {transaction.tourRegistration.phone}
+                </p>
+                <p className="text-sm font-medium">
+                  পরিমাণ: {formatCurrency(transaction.amount)}
+                </p>
+                <p className="text-sm">
+                  পেমেন্ট মাধ্যম: {transaction.paymentMethod}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {formatDateTime(transaction.paymentDate)}
+                </p>
+                {transaction.note && (
+                  <p className="text-sm text-gray-600">
+                    নোট: {transaction.note}
+                  </p>
+                )}
+              </div>
               <div className="space-y-2">
+                <Badge className={`${
+                  transaction.status === 'PENDING'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : transaction.status === 'APPROVED'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {transaction.status === 'PENDING' && 'অপেক্ষমান'}
+                  {transaction.status === 'APPROVED' && 'অনুমোদিত'}
+                  {transaction.status === 'REJECTED' && 'বাতিল'}
+                </Badge>
+                
                 <div className="flex space-x-2">
-                  <Dialog>
+                  <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                     <DialogTrigger asChild>
                       <Button
                         size="sm"
                         variant="outline"
                         className="bg-blue-100 text-blue-800 hover:bg-blue-200"
+                        onClick={() => {
+                          setEditingTransaction(transaction);
+                          setIsEditDialogOpen(true);
+                        }}
                       >
                         <Edit className="h-4 w-4 mr-1" />
-                        সম্পাদনা
+                        এডিট
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>রেজিস্ট্রেশন সম্পাদনা</DialogTitle>
+                        <DialogTitle>লেনদেন এডিট করুন</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                          <Label>নাম</Label>
-                          <Input
-                            defaultValue={reg.name}
-                            onChange={(e) => setEditingRegistration({
-                              ...editingRegistration,
-                              name: e.target.value
-                            })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>ফোন</Label>
-                          <Input
-                            defaultValue={reg.phone}
-                            onChange={(e) => setEditingRegistration({
-                              ...editingRegistration,
-                              phone: e.target.value
-                            })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>ঠিকানা</Label>
-                          <Input
-                            defaultValue={reg.address}
-                            onChange={(e) => setEditingRegistration({
-                              ...editingRegistration,
-                              address: e.target.value
-                            })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>অংশগ্রহণকারী সংখ্যা</Label>
+                          <Label>টাকার পরিমাণ</Label>
                           <Input
                             type="number"
-                            defaultValue={reg.participants}
-                            onChange={(e) => setEditingRegistration({
-                              ...editingRegistration,
-                              participants: parseInt(e.target.value)
+                            value={editingTransaction?.amount || ''}
+                            onChange={(e) => setEditingTransaction({
+                              ...editingTransaction,
+                              amount: parseFloat(e.target.value)
                             })}
                           />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>পেমেন্ট মাধ্যম</Label>
+                          <Select
+                            value={editingTransaction?.paymentMethod || ''}
+                            onValueChange={(value) => setEditingTransaction({
+                              ...editingTransaction,
+                              paymentMethod: value
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="পেমেন্ট মাধ্যম বাছাই করুন" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CASH">ক্যাশ</SelectItem>
+                              <SelectItem value="BKASH">বিকাশ</SelectItem>
+                              <SelectItem value="NAGAD">নগদ</SelectItem>
+                              <SelectItem value="ROCKET">রকেট</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>নোট</Label>
+                          <Input
+                            value={editingTransaction?.note || ''}
+                            onChange={(e) => setEditingTransaction({
+                              ...editingTransaction,
+                              note: e.target.value
+                            })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>স্ট্যাটাস</Label>
+                          <Select
+                            value={editingTransaction?.status || ''}
+                            onValueChange={(value) => setEditingTransaction({
+                              ...editingTransaction,
+                              status: value
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="স্ট্যাটাস বাছাই করুন" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PENDING">অপেক্ষমান</SelectItem>
+                              <SelectItem value="APPROVED">অনুমোদিত</SelectItem>
+                              <SelectItem value="REJECTED">বাতিল</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       <DialogFooter>
                         <Button
-                          onClick={() => handleRegistrationUpdate(reg.id, editingRegistration)}
-                          isLoading={isUpdatingRegistration === reg.id}
+                          variant="outline"
+                          onClick={() => {
+                            setEditingTransaction(null);
+                            setIsEditDialogOpen(false);
+                          }}
                         >
-                          আপডেট করুন
+                          বাতিল
+                        </Button>
+                        <Button
+                          onClick={() => handleEditTransaction(editingTransaction)}
+                          isLoading={isUpdatingTransaction === editingTransaction?.id}
+                        >
+                          আপডেট
                         </Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
 
-                  <AlertDialog>
+                  <AlertDialog open={isDeleteDialogOpen && transactionToDelete === transaction.id} onOpenChange={(open) => {
+                    if (!open) {
+                      setIsDeleteDialogOpen(false);
+                      setTransactionToDelete(null);
+                    }
+                  }}>
                     <AlertDialogTrigger asChild>
                       <Button
                         size="sm"
                         variant="outline"
                         className="bg-red-100 text-red-800 hover:bg-red-200"
+                        onClick={() => {
+                          setTransactionToDelete(transaction.id);
+                          setIsDeleteDialogOpen(true);
+                        }}
                       >
                         <Trash2 className="h-4 w-4 mr-1" />
                         মুছুন
@@ -1125,182 +1845,114 @@ export default function AdminPanel() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          এই রেজিস্ট্রেশন মুছে ফেলা হবে। এই ক্রিয়া অপরিবর্তনীয়।
+                          এই লেনদেনটি মুছে ফেলা হবে। এই ক্রিয়াটি অপরিবর্তনীয়।
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>বাতিল</AlertDialogCancel>
+                        <AlertDialogCancel disabled={deletingTransactionId === transaction.id}>বাতিল</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => handleRegistrationDelete(reg.id)}
+                          onClick={() => handleDeleteTransaction(transaction.id)}
                           className="bg-red-600 hover:bg-red-700"
+                          disabled={deletingTransactionId === transaction.id}
                         >
-                          মুছে ফেলুন
+                          {deletingTransactionId === transaction.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              মুছে ফেলা হচ্ছে...
+                            </>
+                          ) : (
+                            'মুছে ফেলুন'
+                          )}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
-                {reg.status === 'PENDING' && (
-                  <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-green-100 text-green-800 hover:bg-green-200"
-                      onClick={() => handleStatusUpdate(reg.id, 'APPROVED')}
-                      isLoading={isUpdatingRegistration === reg.id}
-                      disabled={isUpdatingRegistration === reg.id}
-                    >
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      অনুমোদন
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-red-100 text-red-800 hover:bg-red-200"
-                      onClick={() => handleStatusUpdate(reg.id, 'REJECTED')}
-                      isLoading={isUpdatingRegistration === reg.id}
-                      disabled={isUpdatingRegistration === reg.id}
-                    >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      বাতিল
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
-        ))}
-    </div>
-  );
-
-  const renderTransactionList = () => (
-    <div className="space-y-4">
-      {pendingTransactions.map((transaction) => (
-        <div
-          key={transaction.id}
-          className="p-4 border rounded-lg space-y-3"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="font-medium text-lg">
-                {transaction.tourRegistration.name}
-              </p>
-              <p className="text-sm text-gray-500">
-                {transaction.tourRegistration.phone}
-              </p>
-              <p className="text-sm font-medium">
-                পরিমাণ: {formatCurrency(transaction.amount)}
-              </p>
-              <p className="text-sm">
-                পেমেন্ট মাধ্যম: {transaction.paymentMethod}
-              </p>
-              <p className="text-sm text-gray-500">
-                তারিখ: {formatDate(transaction.paymentDate)}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Badge className="bg-yellow-100 text-yellow-800">
-                অপেক্ষমান
-              </Badge>
-              <div className="space-x-2 mt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="bg-green-100 text-green-800 hover:bg-green-200"
-                  onClick={() => handleTransactionApproval(transaction.id, 'APPROVED')}
-                  isLoading={isUpdatingTransaction === transaction.id}
-                  disabled={isUpdatingTransaction === transaction.id}
-                >
-                  অনুমোদন
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="bg-red-100 text-red-800 hover:bg-red-200"
-                  onClick={() => handleTransactionApproval(transaction.id, 'REJECTED')}
-                  isLoading={isUpdatingTransaction === transaction.id}
-                  disabled={isUpdatingTransaction === transaction.id}
-                >
-                  বাতিল
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 
   const renderActivityList = () => (
     <div className="space-y-4">
-      {[...activities]
-        .sort((a, b) => new Date(b.time) - new Date(a.time))
-        .map((activity) => (
-          <div
-            key={activity.id}
-            className="p-4 border rounded-lg space-y-3"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="font-medium text-lg">{activity.title}</p>
-                <p className="text-sm text-gray-500">{activity.description}</p>
-                <p className="text-sm">সময়: {formatDate(activity.time)}</p>
-                <p className="text-sm">স্থান: {activity.location}</p>
-              </div>
-              <div className="space-y-2">
-                <Badge className={`${
-                  activity.status === 'UPCOMING' ? 'bg-blue-100 text-blue-800' :
-                  activity.status === 'ONGOING' ? 'bg-green-100 text-green-800' :
-                  activity.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {activity.status === 'UPCOMING' ? 'আসন্ন' :
-                   activity.status === 'ONGOING' ? 'চলমান' :
-                   activity.status === 'COMPLETED' ? 'সম্পন্ন' :
-                   'বাতিল'}
-                </Badge>
-                <div className="space-x-2">
-                  {activity.status === 'UPCOMING' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-green-100 text-green-800 hover:bg-green-200"
-                      onClick={() => handleActivityStatusUpdate(activity.id, 'ONGOING')}
-                      isLoading={isUpdatingActivity === activity.id}
-                      disabled={isUpdatingActivity === activity.id}
-                    >
-                      শুরু করুন
-                    </Button>
-                  )}
-                  {activity.status === 'ONGOING' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-gray-100 text-gray-800 hover:bg-gray-200"
-                      onClick={() => handleActivityStatusUpdate(activity.id, 'COMPLETED')}
-                      isLoading={isUpdatingActivity === activity.id}
-                      disabled={isUpdatingActivity === activity.id}
-                    >
-                      সম্পন্ন করুন
-                    </Button>
-                  )}
-                  {(activity.status === 'UPCOMING' || activity.status === 'ONGOING') && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-red-100 text-red-800 hover:bg-red-200"
-                      onClick={() => handleActivityStatusUpdate(activity.id, 'CANCELLED')}
-                      isLoading={isUpdatingActivity === activity.id}
-                      disabled={isUpdatingActivity === activity.id}
-                    >
-                      বাতিল করুন
-                    </Button>
-                  )}
+      {isLoadingActivities ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <p className="ml-2">লোড হচ্ছে...</p>
+        </div>
+      ) : (
+        [...activities]
+          .sort((a, b) => new Date(b.time) - new Date(a.time))
+          .map((activity) => (
+            <div
+              key={activity.id}
+              className="p-4 border rounded-lg space-y-3"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-lg">{activity.title}</p>
+                  <p className="text-sm text-gray-500">{activity.description}</p>
+                  <p className="text-sm">সময়: {formatDate(activity.time)}</p>
+                  <p className="text-sm">স্থান: {activity.location}</p>
+                </div>
+                <div className="space-y-2">
+                  <Badge className={`${
+                    activity.status === 'UPCOMING' ? 'bg-blue-100 text-blue-800' :
+                    activity.status === 'ONGOING' ? 'bg-green-100 text-green-800' :
+                    activity.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {activity.status === 'UPCOMING' ? 'আসন্ন' :
+                     activity.status === 'ONGOING' ? 'চলমান' :
+                     activity.status === 'COMPLETED' ? 'সম্পন্ন' :
+                     'বাতিল'}
+                  </Badge>
+                  <div className="space-x-2">
+                    {activity.status === 'UPCOMING' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-green-100 text-green-800 hover:bg-green-200"
+                        onClick={() => handleActivityStatusUpdate(activity.id, 'ONGOING')}
+                        isLoading={isUpdatingActivity === activity.id}
+                        disabled={isUpdatingActivity === activity.id}
+                      >
+                        শুরু করুন
+                      </Button>
+                    )}
+                    {activity.status === 'ONGOING' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-gray-100 text-gray-800 hover:bg-gray-200"
+                        onClick={() => handleActivityStatusUpdate(activity.id, 'COMPLETED')}
+                        isLoading={isUpdatingActivity === activity.id}
+                        disabled={isUpdatingActivity === activity.id}
+                      >
+                        সম্পন্ন করুন
+                      </Button>
+                    )}
+                    {(activity.status === 'UPCOMING' || activity.status === 'ONGOING') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-red-100 text-red-800 hover:bg-red-200"
+                        onClick={() => handleActivityStatusUpdate(activity.id, 'CANCELLED')}
+                        isLoading={isUpdatingActivity === activity.id}
+                        disabled={isUpdatingActivity === activity.id}
+                      >
+                        বাতিল করুন
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+      )}
     </div>
   );
 
