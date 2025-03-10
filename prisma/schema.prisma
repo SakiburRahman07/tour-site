@@ -30,7 +30,9 @@ model TourRegistration {
   phone         String        @unique
   address       String
   date          DateTime
+  totalAmount   Float         @default(0)
   paidAmount    Float         @default(0)
+  dueAmount     Float         @default(0)
   status        String        @default("PENDING") // PENDING, APPROVED, REJECTED
   ticketLink    String?      // Google Drive link for ticket
   createdAt     DateTime      @default(now())

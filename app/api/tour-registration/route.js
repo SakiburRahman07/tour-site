@@ -56,10 +56,9 @@ export async function POST(request) {
         name,
         phone,
         address,
-        date: new Date(date),
-        totalAmount: 4500,
+        date,
         paidAmount: 0,
-        dueAmount: 4500,
+        status: "PENDING",
       },
     });
 
