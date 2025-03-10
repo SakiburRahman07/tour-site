@@ -146,6 +146,24 @@ export default function AdminPanel() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
 
+  // Add these state variables with the other state declarations at the top
+  const [editingTicket, setEditingTicket] = useState(null);
+  const [isTicketDialogOpen, setIsTicketDialogOpen] = useState(false);
+  const [newTicketLink, setNewTicketLink] = useState('');
+
+  // Add these state variables at the top with other state declarations
+  const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false);
+  const [newActivityData, setNewActivityData] = useState({
+    title: '',
+    description: '',
+    time: '',
+    location: ''
+  });
+
+  // Add these state variables at the top with other state declarations
+  const [isActivityDeleteDialogOpen, setIsActivityDeleteDialogOpen] = useState(false);
+  const [activityToDelete, setActivityToDelete] = useState(null);
+
   // Check for existing session on component mount
   useEffect(() => {
     const checkSession = () => {
@@ -394,7 +412,7 @@ export default function AdminPanel() {
     }
   };
 
-  const handleTicketAssign = async (registrationId) => {
+  const handleTicketAssign = async (registrationId, ticketLink) => {
     if (!ticketLink) {
       alert('টিকেটের লিংক দিন');
       return;
@@ -411,12 +429,18 @@ export default function AdminPanel() {
       });
 
       if (response.ok) {
-        setTicketLink('');
-        setSelectedRegistration(null);
-        fetchRegistrations();
+        // Close the dialog first if it's open
+        setIsTicketDialogOpen(false);
+        setEditingTicket(null);
+        setNewTicketLink('');
+        // Then refresh the data
+        await fetchRegistrations();
+      } else {
+        alert('টিকেট লিংক আপডেট করতে সমস্যা হয়েছে');
       }
     } catch (error) {
       console.error('Error assigning ticket:', error);
+      alert('টিকেট লিংক আপডেট করতে সমস্যা হয়েছে');
     } finally {
       setIsUpdatingTicket(null);
     }
@@ -434,10 +458,13 @@ export default function AdminPanel() {
       });
 
       if (response.ok) {
-        fetchRegistrations();
+        await fetchRegistrations();
+      } else {
+        alert('টিকেট মুছতে সমস্যা হয়েছে');
       }
     } catch (error) {
       console.error('Error deleting ticket:', error);
+      alert('টিকেট মুছতে সমস্যা হয়েছে');
     } finally {
       setIsUpdatingTicket(null);
     }
@@ -674,7 +701,7 @@ export default function AdminPanel() {
     }
   };
 
-  // Update the handleDeleteTransaction function to manage dialog state
+  // Update the handleDeleteTransaction function
   const handleDeleteTransaction = async (transactionId) => {
     setDeletingTransactionId(transactionId);
     try {
@@ -1037,99 +1064,143 @@ export default function AdminPanel() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {registrations.filter(reg => reg.status === 'APPROVED').map((reg) => (
-                  <div
-                    key={reg.id}
-                    className="p-4 border rounded-lg space-y-3"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium text-lg">{reg.name}</p>
-                        <p className="text-sm text-gray-500">{reg.phone}</p>
-                        <p className="text-sm">তারিখ: {formatDate(reg.date)}</p>
-                        {reg.ticketLink && (
-                          <div className="mt-2 space-y-2">
-                            <a 
-                              href={reg.ticketLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-purple-600 hover:text-purple-800 flex items-center"
-                            >
-                              <Link className="h-4 w-4 mr-1" />
-                              টিকেট লিংক
-                            </a>
-                            <div className="flex space-x-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                                onClick={() => {
-                                  setSelectedRegistration(reg.id);
-                                  setTicketLink(reg.ticketLink);
-                                }}
-                                isLoading={isUpdatingTicket === reg.id}
-                                disabled={isUpdatingTicket === reg.id}
+                {isLoadingRegistrations ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                    <p className="ml-2">লোড হচ্ছে...</p>
+                  </div>
+                ) : (
+                  registrations.filter(reg => reg.status === 'APPROVED').map((reg) => (
+                    <div
+                      key={reg.id}
+                      className="p-4 border rounded-lg space-y-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-lg">{reg.name}</p>
+                          <p className="text-sm text-gray-500">{reg.phone}</p>
+                          <p className="text-sm">তারিখ: {formatDate(reg.date)}</p>
+                          {reg.ticketLink && (
+                            <div className="mt-2 space-y-2">
+                              <a 
+                                href={reg.ticketLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-purple-600 hover:text-purple-800 flex items-center"
                               >
-                                আপডেট
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-red-100 text-red-800 hover:bg-red-200"
-                                onClick={() => handleTicketDelete(reg.id)}
-                                isLoading={isUpdatingTicket === reg.id}
-                                disabled={isUpdatingTicket === reg.id}
-                              >
-                                ডিলিট
-                              </Button>
+                                <Link className="h-4 w-4 mr-1" />
+                                টিকেট লিংক
+                              </a>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        {(!reg.ticketLink || selectedRegistration === reg.id) && (
-                          <>
-                            <Input
-                              placeholder="টিকেটের লিংক দিন"
-                              value={selectedRegistration === reg.id ? ticketLink : ''}
-                              onChange={(e) => {
-                                setSelectedRegistration(reg.id);
-                                setTicketLink(e.target.value);
-                              }}
-                              className="w-64"
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                handleTicketAssign(reg.id);
-                                setSelectedRegistration(null);
-                              }}
-                              className="w-full"
-                              isLoading={isUpdatingTicket === reg.id}
-                              disabled={isUpdatingTicket === reg.id}
-                            >
-                              {reg.ticketLink ? 'আপডেট করুন' : 'টিকেট যোগ করুন'}
-                            </Button>
-                            {selectedRegistration === reg.id && (
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex space-x-2">
+                            {reg.ticketLink ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                                  onClick={() => {
+                                    setEditingTicket(reg);
+                                    setNewTicketLink(reg.ticketLink);
+                                    setIsTicketDialogOpen(true);
+                                  }}
+                                  disabled={isUpdatingTicket === reg.id}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  এডিট
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-red-100 text-red-800 hover:bg-red-200"
+                                  onClick={() => handleTicketDelete(reg.id)}
+                                  disabled={isUpdatingTicket === reg.id}
+                                >
+                                  {isUpdatingTicket === reg.id ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                  )}
+                                  মুছুন
+                                </Button>
+                              </>
+                            ) : (
                               <Button
                                 size="sm"
-                                variant="outline"
+                                className="bg-green-100 text-green-800 hover:bg-green-200"
                                 onClick={() => {
-                                  setSelectedRegistration(null);
-                                  setTicketLink('');
+                                  setEditingTicket(reg);
+                                  setNewTicketLink('');
+                                  setIsTicketDialogOpen(true);
                                 }}
-                                className="w-full"
                                 disabled={isUpdatingTicket === reg.id}
                               >
-                                বাতিল
+                                <Link className="h-4 w-4 mr-1" />
+                                টিকেট যোগ করুন
                               </Button>
                             )}
-                          </>
-                        )}
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  ))
+                )}
+                
+                {/* Ticket Edit Dialog */}
+                <Dialog open={isTicketDialogOpen} onOpenChange={setIsTicketDialogOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingTicket?.ticketLink ? 'টিকেট আপডেট করুন' : 'টিকেট যোগ করুন'}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {editingTicket?.name} এর জন্য টিকেট লিংক {editingTicket?.ticketLink ? 'আপডেট' : 'যোগ'} করুন
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="ticketLink">টিকেট লিংক</Label>
+                          <Input
+                            id="ticketLink"
+                            value={newTicketLink}
+                            onChange={(e) => setNewTicketLink(e.target.value)}
+                            placeholder="টিকেটের লিংক দিন"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsTicketDialogOpen(false);
+                          setEditingTicket(null);
+                          setNewTicketLink('');
+                        }}
+                        disabled={isUpdatingTicket === editingTicket?.id}
+                      >
+                        বাতিল
+                      </Button>
+                      <Button
+                        onClick={() => handleTicketAssign(editingTicket.id, newTicketLink)}
+                        disabled={!newTicketLink || isUpdatingTicket === editingTicket?.id}
+                        isLoading={isUpdatingTicket === editingTicket?.id}
+                      >
+                        {editingTicket?.ticketLink ? 'আপডেট করুন' : 'যোগ করুন'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                
+                {registrations.filter(reg => reg.status === 'APPROVED').length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    কোন অনুমোদিত রেজিস্ট্রেশন নেই
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1720,107 +1791,19 @@ export default function AdminPanel() {
                 </Badge>
                 
                 <div className="flex space-x-2">
-                  <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-blue-100 text-blue-800 hover:bg-blue-200"
-                        onClick={() => {
-                          setEditingTransaction(transaction);
-                          setIsEditDialogOpen(true);
-                        }}
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        এডিট
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>লেনদেন এডিট করুন</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>টাকার পরিমাণ</Label>
-                          <Input
-                            type="number"
-                            value={editingTransaction?.amount || ''}
-                            onChange={(e) => setEditingTransaction({
-                              ...editingTransaction,
-                              amount: parseFloat(e.target.value)
-                            })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>পেমেন্ট মাধ্যম</Label>
-                          <Select
-                            value={editingTransaction?.paymentMethod || ''}
-                            onValueChange={(value) => setEditingTransaction({
-                              ...editingTransaction,
-                              paymentMethod: value
-                            })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="পেমেন্ট মাধ্যম বাছাই করুন" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="CASH">ক্যাশ</SelectItem>
-                              <SelectItem value="BKASH">বিকাশ</SelectItem>
-                              <SelectItem value="NAGAD">নগদ</SelectItem>
-                              <SelectItem value="ROCKET">রকেট</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>নোট</Label>
-                          <Input
-                            value={editingTransaction?.note || ''}
-                            onChange={(e) => setEditingTransaction({
-                              ...editingTransaction,
-                              note: e.target.value
-                            })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>স্ট্যাটাস</Label>
-                          <Select
-                            value={editingTransaction?.status || ''}
-                            onValueChange={(value) => setEditingTransaction({
-                              ...editingTransaction,
-                              status: value
-                            })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="স্ট্যাটাস বাছাই করুন" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PENDING">অপেক্ষমান</SelectItem>
-                              <SelectItem value="APPROVED">অনুমোদিত</SelectItem>
-                              <SelectItem value="REJECTED">বাতিল</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setEditingTransaction(null);
-                            setIsEditDialogOpen(false);
-                          }}
-                        >
-                          বাতিল
-                        </Button>
-                        <Button
-                          onClick={() => handleEditTransaction(editingTransaction)}
-                          isLoading={isUpdatingTransaction === editingTransaction?.id}
-                        >
-                          আপডেট
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                    onClick={() => {
+                      setEditingTransaction(transaction);
+                      setIsEditDialogOpen(true);
+                    }}
+                    disabled={deletingTransactionId === transaction.id}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    এডিট
+                  </Button>
                   <AlertDialog open={isDeleteDialogOpen && transactionToDelete === transaction.id} onOpenChange={(open) => {
                     if (!open) {
                       setIsDeleteDialogOpen(false);
@@ -1836,6 +1819,7 @@ export default function AdminPanel() {
                           setTransactionToDelete(transaction.id);
                           setIsDeleteDialogOpen(true);
                         }}
+                        disabled={deletingTransactionId === transaction.id}
                       >
                         <Trash2 className="h-4 w-4 mr-1" />
                         মুছুন
@@ -1849,7 +1833,9 @@ export default function AdminPanel() {
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deletingTransactionId === transaction.id}>বাতিল</AlertDialogCancel>
+                        <AlertDialogCancel disabled={deletingTransactionId === transaction.id}>
+                          বাতিল
+                        </AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => handleDeleteTransaction(transaction.id)}
                           className="bg-red-600 hover:bg-red-700"
@@ -1889,13 +1875,13 @@ export default function AdminPanel() {
           .map((activity) => (
             <div
               key={activity.id}
-              className="p-4 border rounded-lg space-y-3"
+              className="p-4 border rounded-lg space-y-3 hover:bg-gray-50 transition-colors"
             >
               <div className="flex justify-between items-start">
                 <div>
                   <p className="font-medium text-lg">{activity.title}</p>
                   <p className="text-sm text-gray-500">{activity.description}</p>
-                  <p className="text-sm">সময়: {formatDate(activity.time)}</p>
+                  <p className="text-sm">সময়: {formatDateTime(activity.time)}</p>
                   <p className="text-sm">স্থান: {activity.location}</p>
                 </div>
                 <div className="space-y-2">
@@ -1910,6 +1896,79 @@ export default function AdminPanel() {
                      activity.status === 'COMPLETED' ? 'সম্পন্ন' :
                      'বাতিল'}
                   </Badge>
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                      onClick={() => {
+                        setEditingActivity(activity);
+                        setNewActivityData({
+                          title: activity.title,
+                          description: activity.description,
+                          time: new Date(activity.time).toISOString().slice(0, 16),
+                          location: activity.location
+                        });
+                        setIsActivityDialogOpen(true);
+                      }}
+                      disabled={isUpdatingActivity === activity.id}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      এডিট
+                    </Button>
+                    <AlertDialog 
+                      open={isActivityDeleteDialogOpen && activityToDelete === activity.id} 
+                      onOpenChange={(open) => {
+                        if (!open) {
+                          setIsActivityDeleteDialogOpen(false);
+                          setActivityToDelete(null);
+                        }
+                      }}
+                    >
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-red-100 text-red-800 hover:bg-red-200"
+                          onClick={() => {
+                            setActivityToDelete(activity.id);
+                            setIsActivityDeleteDialogOpen(true);
+                          }}
+                          disabled={isUpdatingActivity === activity.id}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          মুছুন
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>আপনি কি নিশ্চিত?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            এই কার্যক্রমটি মুছে ফেলা হবে। এই ক্রিয়াটি অপরিবর্তনীয়।
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isUpdatingActivity === activity.id}>
+                            বাতিল
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleActivityDelete(activity.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                            disabled={isUpdatingActivity === activity.id}
+                          >
+                            {isUpdatingActivity === activity.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                মুছে ফেলা হচ্ছে...
+                              </>
+                            ) : (
+                              'মুছে ফেলুন'
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                   <div className="space-x-2">
                     {activity.status === 'UPCOMING' && (
                       <Button
@@ -1917,7 +1976,6 @@ export default function AdminPanel() {
                         variant="outline"
                         className="bg-green-100 text-green-800 hover:bg-green-200"
                         onClick={() => handleActivityStatusUpdate(activity.id, 'ONGOING')}
-                        isLoading={isUpdatingActivity === activity.id}
                         disabled={isUpdatingActivity === activity.id}
                       >
                         শুরু করুন
@@ -1929,7 +1987,6 @@ export default function AdminPanel() {
                         variant="outline"
                         className="bg-gray-100 text-gray-800 hover:bg-gray-200"
                         onClick={() => handleActivityStatusUpdate(activity.id, 'COMPLETED')}
-                        isLoading={isUpdatingActivity === activity.id}
                         disabled={isUpdatingActivity === activity.id}
                       >
                         সম্পন্ন করুন
@@ -1941,7 +1998,6 @@ export default function AdminPanel() {
                         variant="outline"
                         className="bg-red-100 text-red-800 hover:bg-red-200"
                         onClick={() => handleActivityStatusUpdate(activity.id, 'CANCELLED')}
-                        isLoading={isUpdatingActivity === activity.id}
                         disabled={isUpdatingActivity === activity.id}
                       >
                         বাতিল করুন
@@ -1953,8 +2009,150 @@ export default function AdminPanel() {
             </div>
           ))
       )}
+
+      {/* Activity Edit Dialog */}
+      <Dialog open={isActivityDialogOpen} onOpenChange={setIsActivityDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>কার্যক্রম সম্পাদনা</DialogTitle>
+            <DialogDescription>
+              কার্যক্রমের তথ্য আপডেট করুন
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">শিরোনাম</Label>
+                <Input
+                  id="title"
+                  value={newActivityData.title}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    title: e.target.value
+                  })}
+                  placeholder="কার্যক্রমের শিরোনাম"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">বিবরণ</Label>
+                <Input
+                  id="description"
+                  value={newActivityData.description}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    description: e.target.value
+                  })}
+                  placeholder="কার্যক্রমের বিবরণ"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time">সময়</Label>
+                <Input
+                  id="time"
+                  type="datetime-local"
+                  value={newActivityData.time}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    time: e.target.value
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="location">স্থান</Label>
+                <Input
+                  id="location"
+                  value={newActivityData.location}
+                  onChange={(e) => setNewActivityData({
+                    ...newActivityData,
+                    location: e.target.value
+                  })}
+                  placeholder="কার্যক্রমের স্থান"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsActivityDialogOpen(false);
+                setEditingActivity(null);
+                setNewActivityData({
+                  title: '',
+                  description: '',
+                  time: '',
+                  location: ''
+                });
+              }}
+              disabled={isUpdatingActivity === editingActivity?.id}
+            >
+              বাতিল
+            </Button>
+            <Button
+              onClick={() => handleActivityUpdate(editingActivity.id, newActivityData)}
+              disabled={isUpdatingActivity === editingActivity?.id}
+              isLoading={isUpdatingActivity === editingActivity?.id}
+            >
+              আপডেট করুন
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+
+  // Add this function to handle activity updates
+  const handleActivityUpdate = async (activityId, updatedData) => {
+    setIsUpdatingActivity(activityId);
+    try {
+      const response = await fetch(`/api/activities/${activityId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData),
+      });
+
+      if (response.ok) {
+        // Close the dialog first
+        setIsActivityDialogOpen(false);
+        setEditingActivity(null);
+        // Then refresh the data
+        await fetchActivities();
+      } else {
+        alert('কার্যক্রম আপডেট করতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error updating activity:', error);
+      alert('কার্যক্রম আপডেট করতে সমস্যা হয়েছে');
+    } finally {
+      setIsUpdatingActivity(null);
+    }
+  };
+
+  // Add this function to handle activity deletion
+  const handleActivityDelete = async (activityId) => {
+    setIsUpdatingActivity(activityId);
+    try {
+      const response = await fetch(`/api/activities/${activityId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchActivities();
+        // Close the dialog after successful deletion
+        setIsActivityDeleteDialogOpen(false);
+        setActivityToDelete(null);
+      } else {
+        alert('কার্যক্রম মুছে ফেলতে সমস্যা হয়েছে');
+      }
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      alert('কার্যক্রম মুছে ফেলতে সমস্যা হয়েছে');
+    } finally {
+      setIsUpdatingActivity(null);
+    }
+  };
 
   if (isLoading) {
     return (
